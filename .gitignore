@@ -30,6 +30,17 @@ playground.xcworkspace
 # .swiftpm
 
 .build/
+.swiftpm/
+
+# Bundle generato da Scripts/build_app.sh
+dist/
+
+# Dati locali dell'app: non devono mai finire nel repo (vive in ~/Library/Application Support)
+kalendario.json
+kalendario.json.bak
+
+# macOS
+.DS_Store
 
 # CocoaPods
 #
