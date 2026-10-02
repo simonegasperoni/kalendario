@@ -7,9 +7,6 @@ struct WeekGridView: View {
     var onCreateEvent: (Date, Int) -> Void
     var onEditEvent: (CalendarEvent) -> Void
 
-    static let hourHeight: CGFloat = 58
-    private let gutterWidth: CGFloat = 64
-
     var body: some View {
         let days = WeekMath.daysInWeek(from: weekStart)
 
@@ -18,7 +15,7 @@ struct WeekGridView: View {
 
             Separator()
 
-            WorkLocationRow(days: days, gutterWidth: gutterWidth)
+            WorkLocationRow(days: days)
 
             Separator()
 
@@ -46,32 +43,6 @@ struct WeekGridView: View {
             }
         }
         .padding(.vertical, 5)
-    }
-
-    /// Gear and the place in use: here the city the forecast refers to is set.
-    private var weatherGear: some View {
-        let weather = AppState.shared.weather
-        let city = weather.placeName.split(separator: ",").first.map(String.init) ?? ""
-        let shown = city.isEmpty ? "set city" : String(city.prefix(9))
-
-        return Button {
-            AppState.shared.showWeatherPlace = true
-        } label: {
-            VStack(spacing: 0) {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                Text(shown)
-                    .font(.system(size: 7.5, weight: .medium))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(Theme.inkFaint)
-            .padding(.vertical, 2)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(weather.hasPlace
-              ? "Weather settings — place: \(weather.placeName)"
-              : "Set the weather place")
     }
 }
 
@@ -114,7 +85,7 @@ struct DayHeaderCell: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
         .padding(.horizontal, 2)
-        .background(dropBackground(today: today))
+        .background(dropBackground)
         .dropDestination(for: String.self) { items, _ in
             guard let text = items.first, let id = UUID(uuidString: text) else { return false }
             store.move(eventID: id, toDay: day)
@@ -124,14 +95,9 @@ struct DayHeaderCell: View {
         }
     }
 
-    /// Cell background: only the highlight while an activity is dragged over it. The table itself
-    /// is transparent: "today" is told by the blue date and weekday.
-    private func dropBackground(today: Bool) -> Color {
-        if app.isHovered("drop-\(WeekMath.dayKey(day))") { return Theme.accent.opacity(0.12) }
-        return Color.clear
+    /// Cell highlight while an activity is dragged over the cell; the table itself is transparent.
+    private var dropBackground: Color {
+        app.isHovered("drop-\(WeekMath.dayKey(day))") ? Theme.accent.opacity(0.12) : Color.clear
     }
 }
 
-struct TimeGutterView: View {
-    var body: some View { EmptyView() }
-}

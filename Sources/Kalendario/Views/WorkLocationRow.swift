@@ -3,7 +3,6 @@ import SwiftUI
 /// One row right under the day headers: where you work on each day of the week.
 struct WorkLocationRow: View {
     let days: [Date]
-    let gutterWidth: CGFloat
 
     private let app = AppState.shared
 
