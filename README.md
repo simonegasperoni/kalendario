@@ -1,7 +1,8 @@
 # Kalendario
 
-Weekly planner for macOS: a Monday→Sunday grid with events, sticky notes with to-do lists, a
-PLACE row marking where you work each day, and read-only import of GitHub issues.
+Weekly planner for macOS: a Monday→Sunday grid with events, all-day activities, sticky notes
+with to-do lists, a PLACE row marking where you work each day, and read-only import of GitHub
+issues.
 
 ## Requirements
 
@@ -40,6 +41,18 @@ store a token with *Issues: read* permission — it goes into the **macOS Keycha
 `local.kalendario.app`), never into the JSON file, the preferences or the logs. `GITHUB_TOKEN` is
 the developer fallback. The import is read-only, and closed issues are ticked as completed when
 you refresh.
+
+## Weather
+
+Each day of the header shows the date, the weekday and the forecast (icon, maximum/minimum).
+Choose the place with the gear in the left gutter of that row, which also shows the city in use.
+The name is geocoded once and kept in the preferences (no account, no API key). Forecast from
+Open-Meteo.com, refreshed every 30 minutes; only the place is remembered, the forecast is never
+written to the data file.
+
+An event can be marked **all-day** (*All-day activity* in the editor): it has no start and end
+time (`"isAllDay": true`, `durationMinutes: 0` in the data file) and it is shown as a chip in the
+header of its day instead of on the timeline.
 
 ## Shortcuts
 

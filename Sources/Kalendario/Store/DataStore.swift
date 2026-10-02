@@ -133,10 +133,12 @@ final class DataStore {
 
     // MARK: - Queries
 
+    /// The events of one day, latest first: the day reads from the evening back to the morning.
+    /// All-day activities are not here: they belong to `allDayEvents(on:)`.
     func events(on day: Date) -> [CalendarEvent] {
         events
-            .filter { WeekMath.calendar.isDate($0.start, inSameDayAs: day) }
-            .sorted { $0.start < $1.start }
+            .filter { !$0.isAllDay && WeekMath.calendar.isDate($0.start, inSameDayAs: day) }
+            .sorted { $0.start > $1.start }
     }
 
     func events(inWeek monday: Date) -> [CalendarEvent] {
@@ -191,10 +193,19 @@ final class DataStore {
 
     // MARK: - Sticky note mutations
 
+    /// Sticky notes of one day, oldest first.
+    func notes(on day: Date) -> [StickyNote] {
+        let key = WeekMath.dayKey(day)
+        return notes
+            .filter { $0.dayKey == key }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
     @discardableResult
-    func addNote(inWeek monday: Date, color: NoteColor? = nil) -> StickyNote {
+    func addNote(inWeek monday: Date, day: Date? = nil, color: NoteColor? = nil) -> StickyNote {
         var note = StickyNote()
         note.weekStart = monday
+        note.dayKey = WeekMath.dayKey(day ?? monday)
         note.color = color ?? .yellow
         notes.append(note)
         scheduleSave()
@@ -291,6 +302,24 @@ final class DataStore {
 
     func assignedDays(inWeek monday: Date) -> Int {
         WeekMath.daysInWeek(from: monday).filter { location(on: $0) != nil }.count
+    }
+
+    // MARK: - All-day activities
+
+    /// Moves an event to another day, keeping its time of day. Used when an activity is dragged
+    /// from one day to another.
+    func move(eventID: UUID, toDay day: Date) {
+        guard let index = eventIndex(of: eventID) else { return }
+        let time = WeekMath.calendar.dateComponents([.hour, .minute], from: events[index].start)
+        events[index].start = WeekMath.makeDate(day: day, hour: time.hour ?? 0, minute: time.minute ?? 0)
+        scheduleSave()
+    }
+
+    /// Activities of one day: events without a start and end time.
+    func allDayEvents(on day: Date) -> [CalendarEvent] {
+        events
+            .filter { $0.isAllDay && WeekMath.calendar.isDate($0.start, inSameDayAs: day) }
+            .sorted { $0.start < $1.start }
     }
 
     // MARK: - GitHub issues
@@ -420,5 +449,17 @@ final class DataStore {
             WeekMath.dayKey(day(3)): client.id,
             WeekMath.dayKey(day(4)): home.id
         ]
+
+        func allDay(_ title: String, _ offset: Int, _ category: EventCategory) -> CalendarEvent {
+            CalendarEvent(title: title,
+                          start: WeekMath.makeDate(day: day(offset), hour: 0),
+                          durationMinutes: 0,
+                          category: category,
+                          isAllDay: true)
+        }
+
+        events.append(allDay("Plan the week and clear the inbox", 0, .work))
+        events.append(allDay("Ship the caching layer", 2, .work))
+        events.append(allDay("On site with the client", 3, .personal))
     }
 }

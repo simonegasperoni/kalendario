@@ -64,8 +64,43 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     var isCompleted: Bool = false
     /// Set when the event comes from an imported GitHub issue; nil for hand-made events.
     var issue: IssueRef?
+    /// An activity for the whole day: it has no start time and no end time.
+    var isAllDay: Bool = false
 
-    var end: Date { start.addingTimeInterval(TimeInterval(durationMinutes * 60)) }
+    init() {}
+
+    init(id: UUID = UUID(), title: String = "", start: Date = Date(), durationMinutes: Int = 60,
+         category: EventCategory = .work, notes: String = "", isCompleted: Bool = false,
+         issue: IssueRef? = nil, isAllDay: Bool = false) {
+        self.id = id
+        self.title = title
+        self.start = start
+        self.durationMinutes = durationMinutes
+        self.category = category
+        self.notes = notes
+        self.isCompleted = isCompleted
+        self.issue = issue
+        self.isAllDay = isAllDay
+    }
+
+    // Tolerant decoding: fields added after the first release (and hand-edited files) must not
+    // fail the whole data file.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        start = try container.decodeIfPresent(Date.self, forKey: .start) ?? Date()
+        durationMinutes = try container.decodeIfPresent(Int.self, forKey: .durationMinutes) ?? 60
+        category = try container.decodeIfPresent(EventCategory.self, forKey: .category) ?? .work
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+        issue = try container.decodeIfPresent(IssueRef.self, forKey: .issue)
+        isAllDay = try container.decodeIfPresent(Bool.self, forKey: .isAllDay) ?? false
+    }
+
+    var end: Date {
+        isAllDay ? start : start.addingTimeInterval(TimeInterval(durationMinutes * 60))
+    }
 
     var displayTitle: String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -73,7 +108,8 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     }
 
     var timeRange: String {
-        "\(DateText.hourMinute.string(from: start))–\(DateText.hourMinute.string(from: end))"
+        guard !isAllDay else { return "All day" }
+        return "\(DateText.hourMinute.string(from: start))–\(DateText.hourMinute.string(from: end))"
     }
 }
 
@@ -247,6 +283,9 @@ struct StickyNote: Identifiable, Codable, Hashable {
     var title: String = ""
     var color: NoteColor = .yellow
     var weekStart: Date = Date()
+    /// Day the note belongs to, as "yyyy-MM-dd": the note is shown inside that day's column.
+    /// Optional, so notes written before this field existed keep loading.
+    var dayKey: String?
     var todos: [TodoItem] = []
     var createdAt: Date = Date()
 

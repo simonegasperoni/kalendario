@@ -11,16 +11,9 @@ struct WorkLocationRow: View {
         let showManager = app.showLocations
 
         HStack(spacing: 0) {
-            HStack(spacing: 4) {
-                Image(systemName: "mappin.and.ellipse")
-                    .font(.system(size: 9.5, weight: .medium))
-                Text("PLACE")
-                    .font(.system(size: 8.5, weight: .semibold))
-                    .kerning(0.5)
-            }
-            .foregroundStyle(Theme.inkFaint)
-            .frame(width: gutterWidth, alignment: .trailing)
-            .padding(.trailing, 8)
+            Color.clear
+                .frame(width: gutterWidth, height: 1)
+                .padding(.trailing, 8)
 
             ForEach(days, id: \.self) { day in
                 WorkLocationCell(day: day)
@@ -28,7 +21,6 @@ struct WorkLocationRow: View {
             }
         }
         .padding(.vertical, 9)
-        .background(Theme.paperElevated.opacity(0.34))
         .sheet(isPresented: Binding(get: { showManager }, set: { app.showLocations = $0 })) {
             WorkLocationsView()
                 .environment(AppState.shared.store)

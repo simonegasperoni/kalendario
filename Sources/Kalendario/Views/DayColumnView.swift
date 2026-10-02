@@ -1,173 +1,65 @@
 import SwiftUI
 
-struct PlannedEvent: Identifiable {
-    let event: CalendarEvent
-    let lane: Int
-    let lanes: Int
-
-    var id: UUID { event.id }
-    var widthFraction: CGFloat { 1 / CGFloat(max(1, lanes)) }
-    var xFraction: CGFloat { CGFloat(lane) / CGFloat(max(1, lanes)) }
-}
-
-enum EventLayoutPlanner {
-    static func plan(_ events: [CalendarEvent]) -> [PlannedEvent] {
-        var result: [PlannedEvent] = []
-        var cluster: [CalendarEvent] = []
-        var clusterEnd: Date = .distantPast
-
-        func flush() {
-            guard !cluster.isEmpty else { return }
-            var laneEnds: [Date] = []
-            var assigned: [(CalendarEvent, Int)] = []
-
-            for event in cluster {
-                if let lane = laneEnds.firstIndex(where: { $0 <= event.start }) {
-                    laneEnds[lane] = event.end
-                    assigned.append((event, lane))
-                } else {
-                    laneEnds.append(event.end)
-                    assigned.append((event, laneEnds.count - 1))
-                }
-            }
-
-            let lanes = max(1, laneEnds.count)
-            for (event, lane) in assigned {
-                result.append(PlannedEvent(event: event, lane: lane, lanes: lanes))
-            }
-
-            cluster = []
-            clusterEnd = .distantPast
-        }
-
-        for event in events.sorted(by: { $0.start < $1.start }) {
-            if event.start >= clusterEnd { flush() }
-            cluster.append(event)
-            clusterEnd = max(clusterEnd, event.end)
-        }
-        flush()
-        return result
-    }
-}
-
+/// One day of the week as a list of its events: no timeline, latest first.
+/// The column itself is transparent and accepts an event dragged from another day.
 struct DayColumnView: View {
     @Environment(DataStore.self) private var store
 
     let day: Date
-    let hourHeight: CGFloat
-    var onCreate: (Int) -> Void
+    var onCreate: () -> Void
     var onEditEvent: (CalendarEvent) -> Void
 
-    private var pxPerMinute: CGFloat { hourHeight / 60 }
-    private var today: Bool { WeekMath.isToday(day) }
-    private var weekend: Bool { WeekMath.isWeekend(day) }
+    private let app = AppState.shared
+
+    private var dayKey: String { WeekMath.dayKey(day) }
 
     var body: some View {
-        let planned = EventLayoutPlanner.plan(store.events(on: day))
+        let events = store.events(on: day)
 
-        GeometryReader { geometry in
-            let columnWidth = geometry.size.width
-
-            ZStack(alignment: .topLeading) {
-                VStack(spacing: 0) {
-                    ForEach(0..<24, id: \.self) { hour in
-                        HourSlotView(hour: hour,
-                                     hoverKey: "slot-\(day.timeIntervalSince1970)-\(hour)",
-                                     onCreate: { onCreate(hour) })
-                            .frame(height: hourHeight)
-                    }
-                }
-                .frame(width: columnWidth)
-
-                ForEach(planned) { item in
-                    EventBlockView(event: item.event, onEdit: onEditEvent)
-                        .frame(width: max(28, columnWidth * item.widthFraction - 6),
-                               height: max(20, CGFloat(item.event.durationMinutes) * pxPerMinute - 4))
-                        .offset(x: columnWidth * item.xFraction + 3,
-                                y: CGFloat(WeekMath.minutesFromMidnight(item.event.start)) * pxPerMinute + 2)
-                }
-
-                if today {
-                    TimelineView(.periodic(from: Date(), by: 60)) { context in
-                        CurrentTimeMarker()
-                            .frame(width: columnWidth)
-                            .offset(y: CGFloat(WeekMath.minutesFromMidnight(context.date)) * pxPerMinute - 3)
-                    }
-                    .allowsHitTesting(false)
-                }
+        VStack(alignment: .leading, spacing: 6) {
+            // Full-day activities first: they belong to the whole day, not to a time.
+            ForEach(store.allDayEvents(on: day)) { activity in
+                EventBlockView(event: activity, onEdit: onEditEvent)
+                    .draggable(activity.id.uuidString)
             }
-            .frame(width: columnWidth, height: hourHeight * 24, alignment: .topLeading)
-            .background(columnBackground)
-            .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline).frame(width: 1) }
-        }
-        .frame(height: hourHeight * 24)
-        .frame(maxWidth: .infinity)
-    }
 
-    @ViewBuilder
-    private var columnBackground: some View {
-        if today {
-            Theme.todayWash
-        } else if weekend {
-            Theme.weekendWash
-        } else {
-            Color.clear
+            ForEach(events) { event in
+                EventBlockView(event: event, onEdit: onEditEvent)
+                    .draggable(event.id.uuidString)
+            }
+
+            Button(action: onCreate) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.inkFaint)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("New event on \(DateText.dayTitle(day))")
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 40, alignment: .top)
+        .columnScroll()
+        .contentShape(Rectangle())
+        .background(app.isHovered("drop-\(dayKey)") ? Theme.accent.opacity(0.10) : Color.clear)
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(Theme.hairline).frame(width: 1)
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let text = items.first, let id = UUID(uuidString: text) else { return false }
+            store.move(eventID: id, toDay: day)
+            return true
+        } isTargeted: { targeted in
+            app.setHovered("drop-\(dayKey)", targeted)
         }
     }
 }
 
-struct HourSlotView: View {
-    let hour: Int
-    let hoverKey: String
-    var onCreate: () -> Void
-
-    private var app: AppState { AppState.shared }
-    private var hovering: Bool { app.isHovered(hoverKey) }
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            Rectangle()
-                .fill(hovering ? Theme.accent.opacity(0.07) : Color.clear)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onCreate)
-                .onHover { app.setHovered(hoverKey, $0) }
-
-            VStack(spacing: 0) {
-                Rectangle().fill(Theme.hairline.opacity(0.85)).frame(height: 1)
-                Spacer(minLength: 0)
-                Rectangle().fill(Theme.hairline.opacity(0.4)).frame(height: 1)
-                Spacer(minLength: 0)
-            }
-            .allowsHitTesting(false)
-
-            if hovering {
-                HStack(spacing: 3) {
-                    Image(systemName: "plus").font(.system(size: 8, weight: .bold))
-                    Text("\(WeekMath.hourLabel(hour)):00").font(.system(size: 9, weight: .semibold))
-                }
-                .foregroundStyle(Theme.accent)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Theme.accentSoft, in: Capsule())
-                .padding(.leading, 5)
-                .padding(.top, 4)
-                .allowsHitTesting(false)
-            }
-        }
-        .help("New event at \(WeekMath.hourLabel(hour)):00")
-    }
-}
-
-struct CurrentTimeMarker: View {
-    var body: some View {
-        HStack(spacing: 0) {
-            Circle().fill(Theme.accent).frame(width: 7, height: 7).offset(x: -3)
-            Rectangle().fill(Theme.accent).frame(height: 1.5)
-        }
-        .frame(height: 7)
-    }
-}
-
+/// One event as a card: category colour, left bar, time range, title, notes and the completed
+/// state. It takes the height of its content, so the day reads as a list.
 struct EventBlockView: View {
     let event: CalendarEvent
     var onEdit: (CalendarEvent) -> Void
@@ -176,14 +68,12 @@ struct EventBlockView: View {
     private var app: AppState { AppState.shared }
     private var hovering: Bool { app.isHovered(key) }
 
-    private var compact: Bool { event.durationMinutes <= 30 }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 0 : 2) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
                 Image(systemName: event.category.symbol)
                     .font(.system(size: 8.5, weight: .semibold))
-                Text(event.timeRange)
+                Text(event.isAllDay ? "FULL DAY" : event.timeRange)
                     .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                 if event.isCompleted {
@@ -194,23 +84,22 @@ struct EventBlockView: View {
             .foregroundStyle(event.category.color)
 
             Text(event.displayTitle)
-                .font(.system(size: compact ? 10 : 11.5, weight: .semibold))
+                .font(.system(size: 11.5, weight: .semibold))
                 .foregroundStyle(Theme.ink)
                 .strikethrough(event.isCompleted, color: Theme.inkSoft)
-                .lineLimit(compact ? 1 : 3)
+                .fixedSize(horizontal: false, vertical: true)
 
-            if !compact, !event.notes.isEmpty {
+            if !event.notes.isEmpty {
                 Text(event.notes)
                     .font(.system(size: 10))
                     .foregroundStyle(Theme.inkSoft)
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(event.category.color.opacity(event.isCompleted ? 0.08 : 0.14))
@@ -229,6 +118,6 @@ struct EventBlockView: View {
         .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         .onTapGesture { onEdit(event) }
         .onHover { app.setHovered(key, $0) }
-        .help("\(event.displayTitle) · \(event.timeRange) — click to edit")
+        .help("\(event.displayTitle) · \(event.timeRange) — click to edit, drag to another day")
     }
 }

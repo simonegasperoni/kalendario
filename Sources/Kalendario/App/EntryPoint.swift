@@ -27,6 +27,19 @@ enum EntryPoint {
             PreviewRenderer.writePlaces(to: url, dark: dark, size: size)
             exit(0)
 
+        case .editor(let url, let dark, let size):
+            _ = NSApplication.shared
+            PreviewRenderer.writeEditor(to: url, dark: dark, size: size)
+            exit(0)
+
+        case .weatherCheck(let place):
+            runWeatherCheck(place)
+            exit(0)
+
+        case .weatherSearch(let name):
+            runWeatherSearch(name)
+            exit(0)
+
         case .githubCheck(let repository):
             runGitHubCheck(repository)
             exit(0)
@@ -148,6 +161,56 @@ enum EntryPoint {
         }
     }
 
+    /// Diagnostic entry point: lists every candidate the geocoder returns for a name.
+    /// Usage: Kalendario --weather-search "Milano"
+    private static func runWeatherSearch(_ name: String) {
+        var report: [String] = []
+        let finished = DispatchSemaphore(value: 0)
+
+        Task {
+            do {
+                report = try await WeatherClient.candidates(for: name)
+            } catch {
+                report.append("error: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
+            }
+            finished.signal()
+        }
+
+        if finished.wait(timeout: .now() + 30) == .timedOut {
+            report.append("error: timed out waiting for Open-Meteo")
+        }
+        report.forEach { print($0) }
+    }
+
+    /// Diagnostic entry point: geocodes a place and prints the forecast it gets back.
+    /// Usage: Kalendario --weather-check "Milan"
+    private static func runWeatherCheck(_ place: String) {
+        var report: [String] = []
+        let finished = DispatchSemaphore(value: 0)
+
+        Task {
+            do {
+                let found = try await WeatherClient.geocode(place)
+                report.append("place: \(found.name) (\(found.latitude), \(found.longitude))")
+                let days = try await WeatherClient.forecast(latitude: found.latitude,
+                                                           longitude: found.longitude)
+                report.append("days: \(days.count)")
+                for forecast in days {
+                    let date = WeatherClient.dayFormatter.string(from: forecast.day)
+                    report.append("  \(date)  \(forecast.symbol)  max \(forecast.maximumText)  min \(forecast.minimumText)  \(forecast.summary)")
+                }
+            } catch {
+                report.append("error: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
+            }
+            finished.signal()
+        }
+
+        if finished.wait(timeout: .now() + 30) == .timedOut {
+            report.append("error: timed out waiting for Open-Meteo")
+        }
+        report.forEach { print($0) }
+    }
+
     /// Diagnostic entry point: reads a repository through the real API and prints what was parsed.
     /// Usage: Kalendario --github-check owner/name
     private static func runGitHubCheck(_ repository: String) {
@@ -193,7 +256,7 @@ struct KalendarioApp: App {
                 .background(WindowProbe())
         }
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 1380, height: 880)
+        .defaultSize(width: 1120, height: 900)
         .commands {
             CommandMenu("Planner") {
                 Button("New event") { AppState.shared.newEventInCurrentWeek() }

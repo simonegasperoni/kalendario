@@ -33,6 +33,42 @@ struct VerticalFlow<Content: View>: View {
     }
 }
 
+/// Vertical scrolling for a single day column, so a long day scrolls on its own.
+/// In a static preview it degrades to the plain stack.
+struct ColumnScrollModifier: ViewModifier {
+    @Environment(\.kalendarioPreview) private var preview
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if preview {
+            content.clipped()
+        } else {
+            ScrollView(.vertical) { content }
+        }
+    }
+}
+
+/// Horizontal scrolling, used by the strip of sticky notes at the bottom.
+struct RowScrollModifier: ViewModifier {
+    @Environment(\.kalendarioPreview) private var preview
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if preview {
+            GeometryReader { geometry in
+                HStack(spacing: 0) { content }
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+                    .clipped()
+            }
+        } else {
+            ScrollView(.horizontal) { content }
+        }
+    }
+}
+
+extension View {
+    func columnScroll() -> some View { modifier(ColumnScrollModifier()) }
+    func rowScroll() -> some View { modifier(RowScrollModifier()) }
+}
+
 /// Inline text field (sticky note title, to-do rows).
 /// In static previews it becomes a `Text`, because `ImageRenderer` does not draw
 /// the content of AppKit text fields.

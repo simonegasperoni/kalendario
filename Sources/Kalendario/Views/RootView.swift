@@ -7,6 +7,7 @@ struct RootView: View {
     var body: some View {
         let editor = app.editor
         let showIssues = app.showIssueImport
+        let showWeatherSettings = app.showWeatherPlace
 
         VStack(spacing: 0) {
             HeaderBar()
@@ -16,25 +17,28 @@ struct RootView: View {
 
             Separator()
 
-            HStack(spacing: 0) {
-                WeekGridView(weekStart: app.weekStart,
-                             onCreateEvent: { day, hour in app.newEvent(day: day, hour: hour) },
-                             onEditEvent: { event in app.edit(event) })
-
-                Separator(axis: .vertical)
-
-                NotesRailView(weekStart: app.weekStart)
-            }
+            WeekGridView(weekStart: app.weekStart,
+                         onCreateEvent: { day, hour in app.newEvent(day: day, hour: hour) },
+                         onEditEvent: { event in app.edit(event) })
 
             Separator()
 
-            FooterView()
+            NotesStripView(weekStart: app.weekStart)
+
+            Separator()
+
+            FooterView(weekStart: app.weekStart)
+                .sheet(isPresented: Binding(get: { showWeatherSettings },
+                                            set: { app.showWeatherPlace = $0 })) {
+                    WeatherSettingsView(model: app.weather)
+                }
         }
         .background(Theme.paper)
         .sheet(item: Binding(get: { editor }, set: { app.editor = $0 })) { draft in
             EventEditorView(draft: draft)
                 .environment(store)
         }
+        .onAppear { app.weather.refreshIfStale() }
         .onChange(of: store.events) { _, _ in store.scheduleSave() }
         .onChange(of: store.notes) { _, _ in store.scheduleSave() }
         .onChange(of: store.locations) { _, _ in store.scheduleSave() }
@@ -43,26 +47,24 @@ struct RootView: View {
 }
 
 struct FooterView: View {
+    @Environment(DataStore.self) private var store
+
+    let weekStart: Date
+
     var body: some View {
         HStack(spacing: 16) {
-            ForEach(EventCategory.allCases) { category in
-                HStack(spacing: 5) {
-                    Circle().fill(category.color).frame(width: 7, height: 7)
-                    Text(category.label).font(.system(size: 11))
-                }
-                .foregroundStyle(Theme.inkSoft)
-            }
+            WeekSummaryChips(weekStart: weekStart)
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
 
             ViewThatFits(in: .horizontal) {
-                hint("Click an empty slot to create an event · ⌘N new event · ⌘T back to today")
+                hint("Use + in a day to add an event · ⌘N new event · ⌘T back to today")
                 hint("⌘N new event · ⌘T today")
                 EmptyView()
             }
         }
         .padding(.horizontal, 20)
-        .frame(height: 32)
+        .frame(height: 34)
         .background(Theme.paperElevated.opacity(0.5))
     }
 
@@ -72,5 +74,35 @@ struct FooterView: View {
             .foregroundStyle(Theme.inkFaint)
             .lineLimit(1)
             .fixedSize()
+    }
+}
+
+/// The counters of the week, shown in the bottom bar.
+struct WeekSummaryChips: View {
+    @Environment(DataStore.self) private var store
+
+    let weekStart: Date
+
+    var body: some View {
+        let weekEvents = store.events(inWeek: weekStart)
+        let done = weekEvents.filter { $0.isCompleted }.count
+        let weekNotes = store.notes(inWeek: weekStart)
+        let todos = weekNotes.flatMap { $0.todos }
+        let todosDone = todos.filter { $0.isDone }.count
+
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                StatChip(symbol: "calendar", text: "\(weekEvents.count) events")
+                StatChip(symbol: "checkmark.circle", text: "\(done) done")
+                StatChip(symbol: "note.text", text: "\(weekNotes.count) sticky notes")
+                StatChip(symbol: "checklist", text: todos.isEmpty ? "0/0" : "\(todosDone)/\(todos.count)")
+            }
+            HStack(spacing: 6) {
+                StatChip(symbol: "calendar", text: "\(weekEvents.count)")
+                StatChip(symbol: "note.text", text: "\(weekNotes.count)")
+                StatChip(symbol: "checklist", text: todos.isEmpty ? "0/0" : "\(todosDone)/\(todos.count)")
+            }
+            EmptyView()
+        }
     }
 }

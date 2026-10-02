@@ -65,14 +65,20 @@ final class AppState {
         if event.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             event.title = "Untitled"
         }
-        event.durationMinutes = max(5, event.durationMinutes)
+        if event.isAllDay {
+            event.durationMinutes = 0
+        } else {
+            event.durationMinutes = max(5, event.durationMinutes)
+        }
         store.upsert(event)
         self.editor = nil
     }
 
     // MARK: - Sticky notes
 
-    func newNote() { store.addNote(inWeek: weekStart) }
+    func newNote() {
+        store.addNote(inWeek: weekStart)
+    }
 
     func todoDraft(for id: UUID) -> String { todoDrafts[id] ?? "" }
 
@@ -100,6 +106,11 @@ final class AppState {
         store.addLocation()
         showLocations = true
     }
+
+    // MARK: - Weather
+
+    var showWeatherPlace = false
+    let weather = WeatherModel()
 
     // MARK: - GitHub issues
 

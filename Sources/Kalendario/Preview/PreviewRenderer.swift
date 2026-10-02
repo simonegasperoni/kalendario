@@ -8,6 +8,11 @@ enum PreviewRenderer {
             AppState.shared.store = store
             AppState.shared.weekStart = WeekMath.startOfWeek(Date())
 
+            AppState.shared.weather.setPlaceForPreview(name: "Milano, Italia",
+                                                   latitude: 45.46427,
+                                                   longitude: 9.18951)
+            AppState.shared.weather.forecasts = sampleForecasts
+
             let view = RootView()
                 .environment(store)
                 .environment(\.kalendarioPreview, true)
@@ -15,6 +20,19 @@ enum PreviewRenderer {
                 .frame(width: size.width, height: size.height)
 
             render(view, to: url, dark: dark)
+        }
+    }
+
+    private static var sampleForecasts: [DailyForecast] {
+        let monday = WeekMath.startOfWeek(Date())
+        let codes = [2, 3, 61, 1, 0, 80, 3]
+        let maxima = [26.0, 24.0, 19.0, 23.0, 27.0, 22.0, 21.0]
+        let minima = [16.0, 15.0, 14.0, 13.0, 15.0, 16.0, 12.0]
+        return (0..<7).map { index in
+            DailyForecast(day: WeekMath.date(dayOfWeek: index, inWeekFrom: monday),
+                          code: codes[index],
+                          maximum: maxima[index],
+                          minimum: minima[index])
         }
     }
 
@@ -34,6 +52,29 @@ enum PreviewRenderer {
             .environment(\.colorScheme, dark ? .dark : .light)
             .background(Theme.paper)
             .frame(width: size.width, height: size.height)
+
+            render(view, to: url, dark: dark)
+        }
+    }
+
+    /// Renders the event editor sheet with sample data, to check its layout.
+    static func writeEditor(to url: URL, dark: Bool, size: CGSize) {
+        MainActor.assumeIsolated {
+            let store = DataStore(inMemory: true)
+            AppState.shared.store = store
+
+            var event = CalendarEvent()
+            event.title = "Team sync"
+            event.start = WeekMath.makeDate(day: WeekMath.startOfWeek(Date()), hour: 14, minute: 30)
+            event.durationMinutes = 45
+            event.category = .study
+            event.notes = "Bring the migration plan"
+
+            let view = EventEditorView(draft: EventDraft(event: event, isNew: false))
+                .environment(store)
+                .environment(\.kalendarioPreview, true)
+                .environment(\.colorScheme, dark ? .dark : .light)
+                .frame(width: size.width, height: size.height)
 
             render(view, to: url, dark: dark)
         }

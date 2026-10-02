@@ -36,7 +36,7 @@ final class WindowManager {
         self.window = window
         window.title = "Kalendario"
         window.tabbingMode = .disallowed
-        window.minSize = NSSize(width: 1020, height: 640)
+        window.minSize = NSSize(width: 900, height: 560)
         window.collectionBehavior = [.fullScreenPrimary]
 
         proxy.forward = window.delegate

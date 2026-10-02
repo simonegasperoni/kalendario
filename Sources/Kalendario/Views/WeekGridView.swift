@@ -10,8 +10,6 @@ struct WeekGridView: View {
     static let hourHeight: CGFloat = 58
     private let gutterWidth: CGFloat = 64
 
-    private var app: AppState { AppState.shared }
-
     var body: some View {
         let days = WeekMath.daysInWeek(from: weekStart)
 
@@ -24,122 +22,121 @@ struct WeekGridView: View {
 
             Separator()
 
-            ScrollViewReader { proxy in
-                VerticalFlow {
-                    HStack(alignment: .top, spacing: 0) {
-                        TimeGutterView(hourHeight: Self.hourHeight, width: gutterWidth)
-
-                        ForEach(days, id: \.self) { day in
-                            DayColumnView(day: day,
-                                          hourHeight: Self.hourHeight,
-                                          onCreate: { hour in onCreateEvent(day, hour) },
-                                          onEditEvent: onEditEvent)
-                        }
-                    }
-                    .onAppear {
-                        guard !app.didScroll else { return }
-                        app.didScroll = true
-                        DispatchQueue.main.async { proxy.scrollTo(7, anchor: .top) }
-                    }
+            // One list of events per day; each column scrolls on its own.
+            HStack(alignment: .top, spacing: 0) {
+                // Same leading space as the header and the place row: all seven columns
+                // then come out the same width.
+                Color.clear
+                    .frame(width: gutterWidth)
+                    .padding(.trailing, 8)
+                ForEach(days, id: \.self) { day in
+                    DayColumnView(day: day,
+                                  onCreate: { onCreateEvent(day, AppState.shared.defaultHour) },
+                                  onEditEvent: onEditEvent)
                 }
             }
-            .overlay {
-                if store.events(inWeek: weekStart).isEmpty { emptyWeekHint }
-            }
+            .frame(maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var emptyWeekHint: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 20, weight: .light))
-            Text("No events this week")
-                .font(.system(size: 12.5, weight: .semibold))
-            Text("Click any empty slot to add one, or import your GitHub issues.")
-                .font(Theme.tinyFont)
-        }
-        .foregroundStyle(Theme.inkSoft)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Theme.paperElevated)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
-        .allowsHitTesting(false)
-    }
-
     private func header(days: [Date]) -> some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: gutterWidth, height: 1)
+            weatherGear
+                .frame(width: gutterWidth, alignment: .trailing)
+                .padding(.trailing, 8)
 
             ForEach(days, id: \.self) { day in
                 DayHeaderCell(day: day)
             }
         }
-        .padding(.vertical, 7)
-        .background(Theme.paperElevated.opacity(0.4))
+        .padding(.vertical, 5)
+    }
+
+    /// Gear and the place in use: here the city the forecast refers to is set.
+    private var weatherGear: some View {
+        let weather = AppState.shared.weather
+        let city = weather.placeName.split(separator: ",").first.map(String.init) ?? ""
+        let shown = city.isEmpty ? "set city" : String(city.prefix(9))
+
+        return Button {
+            AppState.shared.showWeatherPlace = true
+        } label: {
+            VStack(spacing: 0) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(shown)
+                    .font(.system(size: 7.5, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Theme.inkFaint)
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(weather.hasPlace
+              ? "Weather settings — place: \(weather.placeName)"
+              : "Set the weather place")
     }
 }
 
 struct DayHeaderCell: View {
+    @Environment(DataStore.self) private var store
+
     let day: Date
+
+    private let app = AppState.shared
 
     var body: some View {
         let today = WeekMath.isToday(day)
+        let forecast = app.weather.forecast(on: day)
 
-        VStack(spacing: 3) {
-            Text(DateText.weekdayTitle(day))
-                .font(.system(size: 10.5, weight: .semibold))
+        VStack(spacing: 2) {
+            Text("\(DateText.dayNumber.string(from: day)) \(DateText.monthShort.string(from: day))")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(today ? Theme.accent : Theme.ink)
+
+            Text(DateText.weekdayTitle(day).uppercased())
+                .font(.system(size: 8.5, weight: .semibold))
                 .kerning(0.6)
                 .foregroundStyle(today ? Theme.accent : Theme.inkSoft)
 
-            ZStack {
-                if today {
-                    Circle().fill(Theme.accent).frame(width: 27, height: 27)
+            if let forecast {
+                HStack(spacing: 4) {
+                    Image(systemName: forecast.symbol)
+                        .font(.system(size: 15))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Theme.accentStrong)
+                    Text("\(forecast.maximumText)/\(forecast.minimumText)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.ink)
                 }
-                Text(DateText.dayNumber.string(from: day))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(today ? Color.white : Theme.ink)
+                .help("\(forecast.summary) · max \(forecast.maximumText) · min \(forecast.minimumText)")
             }
-            .frame(height: 27)
-
-            Text(DateText.monthShort.string(from: day))
-                .font(.system(size: 9.5, weight: .medium))
-                .foregroundStyle(Theme.inkFaint)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 2)
+        .background(dropBackground(today: today))
+        .dropDestination(for: String.self) { items, _ in
+            guard let text = items.first, let id = UUID(uuidString: text) else { return false }
+            store.move(eventID: id, toDay: day)
+            return true
+        } isTargeted: { targeted in
+            app.setHovered("drop-\(WeekMath.dayKey(day))", targeted)
+        }
+    }
+
+    /// Cell background: only the highlight while an activity is dragged over it. The table itself
+    /// is transparent: "today" is told by the blue date and weekday.
+    private func dropBackground(today: Bool) -> Color {
+        if app.isHovered("drop-\(WeekMath.dayKey(day))") { return Theme.accent.opacity(0.12) }
+        return Color.clear
     }
 }
 
 struct TimeGutterView: View {
-    let hourHeight: CGFloat
-    let width: CGFloat
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ForEach(0..<24, id: \.self) { hour in
-                ZStack(alignment: .topTrailing) {
-                    Color.clear
-                    Text(WeekMath.hourLabel(hour))
-                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.inkFaint)
-                        .padding(.trailing, 9)
-                        .offset(y: hour == 0 ? 2 : -6)
-                }
-                .frame(height: hourHeight)
-                .id(hour)
-            }
-        }
-        .frame(width: width)
-        .background(Theme.paperElevated.opacity(0.35))
-        .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline).frame(width: 1) }
-    }
+    var body: some View { EmptyView() }
 }

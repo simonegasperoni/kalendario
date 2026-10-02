@@ -7,8 +7,11 @@ struct LaunchOptions {
         case header(url: URL, dark: Bool, size: CGSize)
         case importPreview(url: URL, dark: Bool, size: CGSize)
         case places(url: URL, dark: Bool, size: CGSize)
+        case editor(url: URL, dark: Bool, size: CGSize)
         case icon(directory: URL)
         case githubCheck(repository: String)
+        case weatherCheck(place: String)
+        case weatherSearch(name: String)
         case jsonCheck(path: URL?)
     }
 
@@ -25,8 +28,11 @@ struct LaunchOptions {
         var headerURL: URL?
         var importURL: URL?
         var placesURL: URL?
+        var editorURL: URL?
         var iconURL: URL?
         var githubRepository: String?
+        var weatherPlace: String?
+        var weatherSearchName: String?
         var jsonCheckRequested = false
         var jsonCheckPath: URL?
         var watchSeconds: Int?
@@ -47,9 +53,18 @@ struct LaunchOptions {
             case "--render-places":
                 index += 1
                 if index < arguments.count { placesURL = URL(fileURLWithPath: arguments[index]) }
+            case "--render-editor":
+                index += 1
+                if index < arguments.count { editorURL = URL(fileURLWithPath: arguments[index]) }
             case "--github-check":
                 index += 1
                 if index < arguments.count { githubRepository = arguments[index] }
+            case "--weather-check":
+                index += 1
+                if index < arguments.count { weatherPlace = arguments[index] }
+            case "--weather-search":
+                index += 1
+                if index < arguments.count { weatherSearchName = arguments[index] }
             case "--json-check":
                 jsonCheckRequested = true
                 if index + 1 < arguments.count, arguments[index + 1].hasSuffix(".json") {
@@ -89,8 +104,14 @@ struct LaunchOptions {
             task = .importPreview(url: importURL, dark: dark, size: size)
         } else if let placesURL {
             task = .places(url: placesURL, dark: dark, size: size)
+        } else if let editorURL {
+            task = .editor(url: editorURL, dark: dark, size: size)
         } else if let githubRepository {
             task = .githubCheck(repository: githubRepository)
+        } else if let weatherPlace {
+            task = .weatherCheck(place: weatherPlace)
+        } else if let weatherSearchName {
+            task = .weatherSearch(name: weatherSearchName)
         } else if jsonCheckRequested {
             task = .jsonCheck(path: jsonCheckPath)
         }

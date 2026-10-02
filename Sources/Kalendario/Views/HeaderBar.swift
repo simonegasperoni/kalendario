@@ -10,7 +10,7 @@ struct HeaderBar: View {
             brand
             weekNavigator
             Spacer(minLength: 8)
-            stats
+            weatherChip
             HStack(spacing: 8) {
                 Button { AppState.shared.newEventInCurrentWeek() } label: {
                     Label("Event", systemImage: "plus")
@@ -90,6 +90,33 @@ struct HeaderBar: View {
             .fixedSize()
             .help("Back to the current week (⌘T)")
         }
+    }
+
+    /// Shows the place the forecast refers to, and opens the weather settings.
+    private var weatherChip: some View {
+        let weather = AppState.shared.weather
+        let full = weather.hasPlace ? weather.placeName : "Set weather place"
+        let shown = full.count > 18 ? String(full.prefix(17)) + "…" : full
+
+        return Button {
+            AppState.shared.showWeatherPlace = true
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.system(size: 9.5, weight: .semibold))
+                Text(shown)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Theme.inkSoft)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Theme.ink.opacity(0.055), in: Capsule())
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("Weather settings — place: \(full)")
     }
 
     private var stats: some View {

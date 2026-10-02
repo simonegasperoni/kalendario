@@ -4,21 +4,33 @@ struct EventEditorView: View {
     @Bindable var draft: EventDraft
 
     @FocusState private var titleFocused: Bool
+    /// In a static preview the sheet is not sized, so the whole body can be rendered at once.
+    @Environment(\.kalendarioPreview) private var preview
 
     private let presetDurations = [15, 30, 45, 60, 90, 120, 180, 240]
+    /// Three tags per row: eight categories in three readable rows.
+    private static let categoryRows: [[EventCategory]] = {
+        let all = EventCategory.allCases
+        return stride(from: 0, to: all.count, by: 3).map {
+            Array(all[$0..<min($0 + 3, all.count)])
+        }
+    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Separator()
 
-            ScrollView {
+            VerticalFlow {
                 VStack(alignment: .leading, spacing: 16) {
                     titleField
+                    allDayField
                     categoryField
                     dayField
-                    timeField
-                    durationField
+                    if !draft.event.isAllDay {
+                        timeField
+                        durationField
+                    }
                     completionField
                     notesField
                 }
@@ -28,7 +40,7 @@ struct EventEditorView: View {
             Separator()
             footer
         }
-        .frame(width: 470, height: 590)
+        .frame(width: preview ? nil : 470, height: preview ? nil : 590)
         .background(Theme.paper)
         .onAppear {
             if draft.event.title.isEmpty { titleFocused = true }
@@ -69,30 +81,68 @@ struct EventEditorView: View {
         }
     }
 
+    /// An activity for the whole day: no start time, no end time.
+    private var allDayField: some View {
+        Toggle(isOn: $draft.event.isAllDay) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("All-day activity").font(.system(size: 12.5))
+                Text("No start or end time: it marks the whole day")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.inkFaint)
+            }
+        }
+        .toggleStyle(.switch)
+        .tint(Theme.accent)
+        .onChange(of: draft.event.isAllDay) { _, isAllDay in
+            if isAllDay {
+                draft.event.durationMinutes = 0
+            } else if draft.event.durationMinutes == 0 {
+                draft.event.durationMinutes = 60
+            }
+        }
+    }
+
     private var categoryField: some View {
         FieldBox(title: "Category") {
-            HStack(spacing: 6) {
-                ForEach(EventCategory.allCases) { category in
-                    let selected = draft.event.category == category
-                    Button {
-                        draft.event.category = category
-                    } label: {
-                        HStack(spacing: 5) {
-                            Circle().fill(selected ? Color.white : category.color).frame(width: 7, height: 7)
-                            Text(category.label).font(.system(size: 11.5, weight: .medium))
+            VStack(spacing: 6) {
+                ForEach(Array(Self.categoryRows.enumerated()), id: \.offset) { entry in
+                    HStack(spacing: 6) {
+                        ForEach(entry.element) { category in
+                            categoryTag(category)
                         }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .foregroundStyle(selected ? Color.white : Theme.ink)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(selected ? category.color : Theme.ink.opacity(0.06))
-                        )
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
+    }
+
+    private func categoryTag(_ category: EventCategory) -> some View {
+        let selected = draft.event.category == category
+        return Button {
+            draft.event.category = category
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: category.symbol)
+                    .font(.system(size: 9, weight: .semibold))
+                Text(category.label)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 7)
+            .foregroundStyle(selected ? Color.white : Theme.ink)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(selected ? category.color : Theme.ink.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(category.color.opacity(selected ? 0 : 0.55), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(category.label)
     }
 
     private var dayField: some View {
