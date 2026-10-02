@@ -24,15 +24,14 @@ struct WeekGridView: View {
 
             // One list of events per day; each column scrolls on its own.
             HStack(alignment: .top, spacing: 0) {
-                // Same leading space as the header and the place row: all seven columns
-                // then come out the same width.
-                Color.clear
-                    .frame(width: gutterWidth)
-                    .padding(.trailing, 8)
                 ForEach(days, id: \.self) { day in
                     DayColumnView(day: day,
                                   onCreate: { onCreateEvent(day, AppState.shared.defaultHour) },
                                   onEditEvent: onEditEvent)
+                        // Without this the column is a ScrollView, which is not greedy: the stack
+                        // would give it the width its content asks for, so a day with longer
+                        // texts came out wider than the others.
+                        .frame(maxWidth: .infinity)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -42,10 +41,6 @@ struct WeekGridView: View {
 
     private func header(days: [Date]) -> some View {
         HStack(spacing: 0) {
-            weatherGear
-                .frame(width: gutterWidth, alignment: .trailing)
-                .padding(.trailing, 8)
-
             ForEach(days, id: \.self) { day in
                 DayHeaderCell(day: day)
             }

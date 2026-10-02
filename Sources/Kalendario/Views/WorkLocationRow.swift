@@ -11,10 +11,6 @@ struct WorkLocationRow: View {
         let showManager = app.showLocations
 
         HStack(spacing: 0) {
-            Color.clear
-                .frame(width: gutterWidth, height: 1)
-                .padding(.trailing, 8)
-
             ForEach(days, id: \.self) { day in
                 WorkLocationCell(day: day)
                     .frame(maxWidth: .infinity)

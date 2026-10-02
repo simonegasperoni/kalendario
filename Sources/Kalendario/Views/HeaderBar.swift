@@ -102,7 +102,7 @@ struct HeaderBar: View {
             AppState.shared.showWeatherPlace = true
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "mappin.and.ellipse")
+                Image(systemName: "gearshape.fill")
                     .font(.system(size: 9.5, weight: .semibold))
                 Text(shown)
                     .font(.system(size: 11, weight: .medium))
