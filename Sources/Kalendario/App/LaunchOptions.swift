@@ -12,6 +12,10 @@ struct LaunchOptions {
         case jsonCheck(path: URL?)
     }
 
+    /// Used by the app lifecycle to run the window watcher after launch.
+    static var windowWatchSeconds: Int?
+    static var windowWatchPath: String?
+
     var task: Task = .none
 
     init(arguments: [String]) {
@@ -25,6 +29,8 @@ struct LaunchOptions {
         var githubRepository: String?
         var jsonCheckRequested = false
         var jsonCheckPath: URL?
+        var watchSeconds: Int?
+        var watchPath: String?
 
         var index = 1
         while index < arguments.count {
@@ -49,6 +55,15 @@ struct LaunchOptions {
                 if index + 1 < arguments.count, arguments[index + 1].hasSuffix(".json") {
                     index += 1
                     jsonCheckPath = URL(fileURLWithPath: arguments[index])
+                }
+            case "--window-watch":
+                if index + 1 < arguments.count, let seconds = Int(arguments[index + 1]) {
+                    index += 1
+                    watchSeconds = seconds
+                }
+                if index + 1 < arguments.count, arguments[index + 1].hasPrefix("/") {
+                    index += 1
+                    watchPath = arguments[index]
                 }
             case "--render-icon":
                 index += 1
@@ -79,6 +94,9 @@ struct LaunchOptions {
         } else if jsonCheckRequested {
             task = .jsonCheck(path: jsonCheckPath)
         }
+
+        LaunchOptions.windowWatchSeconds = watchSeconds
+        LaunchOptions.windowWatchPath = watchPath
     }
 
     private static func parseSize(_ raw: String) -> CGSize? {

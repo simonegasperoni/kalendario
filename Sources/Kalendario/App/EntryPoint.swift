@@ -187,7 +187,7 @@ struct KalendarioApp: App {
     private let app = AppState.shared
 
     var body: some Scene {
-        WindowGroup("Kalendario") {
+        WindowGroup("Kalendario", id: "main") {
             RootView()
                 .environment(app.store)
                 .background(WindowProbe())
@@ -195,11 +195,14 @@ struct KalendarioApp: App {
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1380, height: 880)
         .commands {
-            CommandGroup(replacing: .newItem) {
+            CommandMenu("Planner") {
                 Button("New event") { AppState.shared.newEventInCurrentWeek() }
                     .keyboardShortcut("n", modifiers: .command)
                 Button("New sticky note") { AppState.shared.newNote() }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
+                Divider()
+                Button("Show window") { WindowManager.shared.showMainWindow() }
+                    .keyboardShortcut("0", modifiers: .command)
             }
             CommandMenu("Week") {
                 Button("Today") { AppState.shared.goToToday() }
