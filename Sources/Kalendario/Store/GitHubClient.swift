@@ -58,6 +58,37 @@ struct GitHubIssue: Identifiable, Hashable {
         if !url.isEmpty { parts.append(url) }
         return parts.joined(separator: "\n")
     }
+
+    /// The issue body, line by line, cleaned up so it can become the to-do list of a sticky note:
+    /// markdown bullets, checkboxes, numbered lists and heading marks are removed, empty lines
+    /// dropped, and each line is capped so a paragraph does not turn into an endless task.
+    var todoLines: [String] {
+        guard let body, !body.isEmpty else { return [] }
+
+        var lines: [String] = []
+        for rawLine in body.split(separator: "\n", omittingEmptySubsequences: true) {
+            var line = rawLine.trimmingCharacters(in: .whitespaces)
+
+            for marker in ["- [ ] ", "- [x] ", "- [X] ", "- ", "* ", "+ "]
+            where line.hasPrefix(marker) {
+                line.removeFirst(marker.count)
+                break
+            }
+
+            if let dot = line.firstIndex(of: "."), line.distance(from: line.startIndex, to: dot) <= 2,
+               line[line.startIndex..<dot].allSatisfy(\.isNumber) {
+                line = line[line.index(after: dot)...].trimmingCharacters(in: .whitespaces)
+            }
+
+            line = line.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+            guard !line.isEmpty else { continue }
+
+            if line.count > 120 { line = String(line.prefix(117)) + "…" }
+            lines.append(line)
+            if lines.count >= 20 { break }
+        }
+        return lines
+    }
 }
 
 /// Minimal read-only GitHub client: lists issues of one repository.

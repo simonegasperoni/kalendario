@@ -36,7 +36,10 @@ even though the code is in English: **do not rename them**, or existing files st
 ## GitHub import
 
 Enter a repository (`owner/name` or a pasted URL), load, tick issues, choose day/time and place
-them. Public repositories need no token (60 requests/hour); for private ones, or a higher limit,
+them. Every imported issue also becomes a **sticky note** of that week: its title is
+`#123 Issue title` and the lines of the issue body become the to-do list (markdown bullets,
+checkboxes and headings are stripped; at most 20 lines of 120 characters). Re-importing refreshes
+the note instead of adding a second one. Public repositories need no token (60 requests/hour); for private ones, or a higher limit,
 store a token with *Issues: read* permission — it goes into the **macOS Keychain** (service
 `local.kalendario.app`), never into the JSON file, the preferences or the logs. `GITHUB_TOKEN` is
 the developer fallback. The import is read-only, and closed issues are ticked as completed when

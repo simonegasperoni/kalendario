@@ -230,6 +230,9 @@ enum EntryPoint {
                     let due = issue.milestoneDue.map { DateText.monthDayShort.string(from: $0) } ?? "-"
                     report.append("  \(issue.reference) [\(issue.state)] due=\(due) labels=\(labels)")
                     report.append("     \(issue.title)")
+                    let todos = issue.todoLines
+                    report.append("     body → sticky note with \(todos.count) to-do lines:")
+                    for line in todos.prefix(4) { report.append("       • \(line)") }
                 }
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription

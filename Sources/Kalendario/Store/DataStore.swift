@@ -358,8 +358,35 @@ final class DataStore {
             created += 1
         }
 
+        // The body of every issue also becomes a sticky note of that week.
+        for issue in issues {
+            upsertIssueNote(issue, day: issue.milestoneDue ?? day)
+        }
+
         scheduleSave()
         return created
+    }
+
+    /// The issue body becomes a sticky note: title "#123 Title", one to-do per line of the body.
+    /// Re-importing refreshes the to-dos instead of adding a second note.
+    private func upsertIssueNote(_ issue: GitHubIssue, day: Date) {
+        let title = "\(issue.reference) \(issue.title)"
+        let lines = issue.todoLines
+        guard !lines.isEmpty else { return }
+
+        if let index = notes.firstIndex(where: { $0.title == title }) {
+            notes[index].todos = lines.map { TodoItem(text: $0) }
+            notes[index].weekStart = WeekMath.startOfWeek(day)
+            notes[index].dayKey = WeekMath.dayKey(day)
+            return
+        }
+
+        var note = StickyNote()
+        note.title = title
+        note.weekStart = WeekMath.startOfWeek(day)
+        note.dayKey = WeekMath.dayKey(day)
+        note.todos = lines.map { TodoItem(text: $0) }
+        notes.append(note)
     }
 
     /// Refreshes the events that were imported from GitHub. Returns how many were touched.
