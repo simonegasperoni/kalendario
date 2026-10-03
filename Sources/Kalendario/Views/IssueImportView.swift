@@ -18,7 +18,7 @@ struct IssueImportView: View {
             VerticalFlow {
                 VStack(alignment: .leading, spacing: 16) {
                     repositoryField
-                    tokenField
+                    accessLine
                     filtersField
 
                     if !model.status.isEmpty {
@@ -82,36 +82,28 @@ struct IssueImportView: View {
 
     // MARK: - Token
 
-    private var tokenField: some View {
-        FieldBox(title: "Access token") {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    SecureField("ghp_… (optional)", text: $model.tokenInput)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(Theme.ink)
-                        .fieldChrome()
+    /// The token is set in the settings window and nowhere else: this line only says whether one is in
+    /// use, and offers the way there.
+    private var accessLine: some View {
+        HStack(spacing: 8) {
+            Image(systemName: model.hasStoredToken ? "checkmark.seal.fill" : "info.circle")
+                .font(.system(size: 10.5))
+                .foregroundStyle(model.hasStoredToken ? Theme.accent : Theme.inkFaint)
 
-                    Button("Save") { model.saveToken() }
-                        .buttonStyle(PillButtonStyle(kind: .secondary))
-                        .disabled(model.tokenInput.isEmpty)
+            Text(model.hasStoredToken
+                 ? "A GitHub token is in use, stored in the macOS Keychain from the settings. It is never written to your calendar file."
+                 : "No token yet: only public repositories work. Add one in the settings.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
 
-                    if model.hasStoredToken {
-                        Button("Remove") { model.clearToken() }
-                            .buttonStyle(PillButtonStyle(kind: .secondary))
-                    }
-                }
+            Spacer(minLength: 0)
 
-                HStack(spacing: 5) {
-                    Image(systemName: model.hasStoredToken ? "checkmark.seal.fill" : "info.circle")
-                        .font(.system(size: 10))
-                    Text(model.hasStoredToken
-                         ? "A token is stored in the macOS Keychain. It is never written to your calendar file."
-                         : "Without a token only public repositories work, with a 60 requests/hour limit.")
-                        .font(Theme.tinyFont)
-                }
-                .foregroundStyle(Theme.inkFaint)
+            Button("Settings (⌘,)") {
+                app.showIssueImport = false
+                app.showSettings = true
             }
+            .buttonStyle(PillButtonStyle(kind: .secondary))
         }
     }
 

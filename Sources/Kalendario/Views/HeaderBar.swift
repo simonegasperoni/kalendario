@@ -30,7 +30,9 @@ struct HeaderBar: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        // 8 pt, not 12: the box of the date and the clock wants its full height, and a squeezed
+        // box ends up glued to the separator under the top bar.
+        .padding(.vertical, 8)
         .background(Theme.paperElevated.opacity(0.55))
     }
 
@@ -45,6 +47,9 @@ struct HeaderBar: View {
                     .offset(y: 0.5)
             }
             .frame(width: 26, height: 26)
+
+            // The date and the clock sit between the app mark and the name, as asked on 2026-10-03.
+            todayBox
 
             Text("Kalendario")
                 .font(Theme.titleFont)
@@ -74,32 +79,64 @@ struct HeaderBar: View {
             IconButton(symbol: "chevron.right", help: "Next week (⌘→)") {
                 AppState.shared.nextWeek()
             }
-
-            Button {
-                AppState.shared.goToToday()
-            } label: {
-                Text("Today")
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Theme.inkSoft)
-                    .lineLimit(1)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(Theme.ink.opacity(0.07), in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .fixedSize()
-            .help("Back to the current week (⌘T)")
         }
     }
 
-    /// Shows the place the forecast refers to, and opens the weather settings.
+    /// Today's date and the time, big enough to read at a glance, each with its own mark (a calendar
+    /// and a clock). It is also the way back to the current week, like ⌘T.
+    private var todayBox: some View {
+        let now = AppState.shared.stats.now
+
+        return Button {
+            AppState.shared.goToToday()
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 8.5, weight: .semibold))
+                    Text("\(DateText.weekdayTitle(now)) \(DateText.dayNumber.string(from: now)) \(DateText.monthShort.string(from: now))")
+                        .font(.system(size: 11, weight: .semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+                .foregroundStyle(Theme.inkSoft)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(DateText.hourMinute.string(from: now))
+                        .font(.system(size: 19, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+                .foregroundStyle(Theme.ink)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Theme.ink.opacity(0.055))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Theme.hairline, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Rigid in both directions: the top bar must grow to hold it, not squeeze it.
+        .fixedSize(horizontal: true, vertical: true)
+        .help("Today — back to the current week (⌘T)")
+    }
+
+    /// Shows the place the forecast refers to, and opens the settings (place, token, work places).
     private var weatherChip: some View {
         let weather = AppState.shared.weather
         let full = weather.hasPlace ? weather.placeName : "Set weather place"
         let shown = full.count > 18 ? String(full.prefix(17)) + "…" : full
 
         return Button {
-            AppState.shared.showWeatherPlace = true
+            AppState.shared.showSettings = true
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "gearshape.fill")
@@ -116,7 +153,7 @@ struct HeaderBar: View {
         }
         .buttonStyle(.plain)
         .fixedSize()
-        .help("Weather settings — place: \(full)")
+        .help("Settings — weather place: \(full), GitHub token, work places")
     }
 
     private var stats: some View {

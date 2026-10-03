@@ -12,6 +12,26 @@ enum PreviewRenderer {
                                                    latitude: 45.46427,
                                                    longitude: 9.18951)
             AppState.shared.weather.forecasts = sampleForecasts
+            // The two status rows read the machine and the network: give them something to show.
+            AppState.shared.stats.read()
+            AppState.shared.repoMeta.setForPreview()
+
+            // Two imported issues, so the GitHub row at the foot of the calendar draws its day cells
+            // instead of its empty state — the same repositories the sample numbers above use.
+            var imported = CalendarEvent()
+            imported.title = "#92891 SourceKit: SIGABRT"
+            imported.start = WeekMath.makeDate(day: WeekMath.startOfWeek(Date()), hour: 9)
+            imported.durationMinutes = 30
+            imported.issue = IssueRef(repo: "swiftlang/swift", number: 92891, url: "",
+                                      labels: [], state: "open", updatedAt: nil)
+            store.events.append(imported)
+
+            var second = imported
+            second.id = UUID()
+            second.title = "#405 Import issues from GitHub"
+            second.issue = IssueRef(repo: "apple/swift-nio", number: 405, url: "",
+                                    labels: [], state: "open", updatedAt: nil)
+            store.events.append(second)
 
             let view = RootView()
                 .environment(store)
@@ -52,6 +72,29 @@ enum PreviewRenderer {
             .environment(\.colorScheme, dark ? .dark : .light)
             .background(Theme.paper)
             .frame(width: size.width, height: size.height)
+
+            render(view, to: url, dark: dark)
+        }
+    }
+
+    /// Renders the settings window, to check the three sections fit together.
+    static func writeSettings(to url: URL, dark: Bool, size: CGSize) {
+        MainActor.assumeIsolated {
+            let store = DataStore(inMemory: true)
+            AppState.shared.store = store
+
+            AppState.shared.weather.setPlaceForPreview(name: "Milano, Italia",
+                                                   latitude: 45.46427,
+                                                   longitude: 9.18951)
+            AppState.shared.weather.forecasts = sampleForecasts
+            AppState.shared.repoMeta.setForPreview()
+            AppState.shared.stats.read()
+
+            let view = SettingsView()
+                .environment(store)
+                .environment(\.kalendarioPreview, true)
+                .environment(\.colorScheme, dark ? .dark : .light)
+                .frame(width: size.width, height: size.height)
 
             render(view, to: url, dark: dark)
         }

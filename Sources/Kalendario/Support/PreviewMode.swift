@@ -47,6 +47,25 @@ struct ColumnScrollModifier: ViewModifier {
     }
 }
 
+/// Vertical scrolling inside a single sticky note card: a note with many to-dos scrolls instead
+/// of growing past the panel and covering the calendar. In a static preview it is clipped to the
+/// space it is given, because `ImageRenderer` does not draw the content of a `ScrollView`.
+struct CardScrollModifier: ViewModifier {
+    @Environment(\.kalendarioPreview) private var preview
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if preview {
+            GeometryReader { geometry in
+                content
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+                    .clipped()
+            }
+        } else {
+            ScrollView(.vertical) { content }
+        }
+    }
+}
+
 /// Horizontal scrolling, used by the strip of sticky notes at the bottom.
 struct RowScrollModifier: ViewModifier {
     @Environment(\.kalendarioPreview) private var preview
@@ -67,6 +86,7 @@ struct RowScrollModifier: ViewModifier {
 extension View {
     func columnScroll() -> some View { modifier(ColumnScrollModifier()) }
     func rowScroll() -> some View { modifier(RowScrollModifier()) }
+    func cardScroll() -> some View { modifier(CardScrollModifier()) }
 }
 
 /// Inline text field (sticky note title, to-do rows).
@@ -80,6 +100,9 @@ struct InlineField: View {
     var font: Font = .system(size: 12.5)
     var color: Color = Theme.ink
     var strikethrough: Bool = false
+    /// Text that does not fit on one line goes on to the next, up to three lines. Left off for the
+    /// "add a task" field, where Return has to add the task instead of starting a new line.
+    var wraps: Bool = false
 
     var body: some View {
         if preview {
@@ -89,6 +112,13 @@ struct InlineField: View {
                 .strikethrough(strikethrough, color: color.opacity(0.6))
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        } else if wraps {
+            TextField(placeholder, text: $text, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(font)
+                .foregroundStyle(color)
+                .strikethrough(strikethrough, color: color.opacity(0.6))
+                .lineLimit(1...3)
         } else {
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)

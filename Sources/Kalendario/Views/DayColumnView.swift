@@ -15,45 +15,70 @@ struct DayColumnView: View {
 
     var body: some View {
         let events = store.events(on: day)
+        let isToday = WeekMath.isToday(day)
 
-        VStack(alignment: .leading, spacing: 6) {
-            // Full-day activities first: they belong to the whole day, not to a time.
-            ForEach(store.allDayEvents(on: day)) { activity in
-                EventBlockView(event: activity, onEdit: onEditEvent)
-                    .draggable(activity.id.uuidString)
-            }
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                // Full-day activities first: they belong to the whole day, not to a time.
+                ForEach(store.allDayEvents(on: day)) { activity in
+                    EventBlockView(event: activity, onEdit: onEditEvent)
+                        .draggable(activity.id.uuidString)
+                }
 
-            ForEach(events) { event in
-                EventBlockView(event: event, onEdit: onEditEvent)
-                    .draggable(event.id.uuidString)
+                ForEach(events) { event in
+                    EventBlockView(event: event, onEdit: onEditEvent)
+                        .draggable(event.id.uuidString)
+                }
             }
-
-            Button(action: onCreate) {
-                Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.inkFaint)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("New event on \(DateText.dayTitle(day))")
+            .padding(.horizontal, 4)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 40, alignment: .top)
+            .columnScroll()
+            .frame(maxHeight: .infinity)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, minHeight: 40, alignment: .top)
-        .columnScroll()
         .contentShape(Rectangle())
         .background(app.isHovered("drop-\(dayKey)") ? Theme.accent.opacity(0.10) : Color.clear)
+        // The forecast is the backdrop of the day on every column: same superimposition behind the
+        // events, only the colour changes — paperShade on the paper, a darker celeste on today's
+        // slate. The user asked for exactly this consistency on 2026-10-04. It goes *before* the dark
+        // fill of today, which is opaque: drawn after, it would hide the forecast completely.
+        .background(alignment: .bottom) { weatherWatermark(isToday: isToday) }
+        .background(isToday ? Theme.todayColumn : Color.clear)
         .overlay(alignment: .trailing) {
             Rectangle().fill(Theme.hairline).frame(width: 1)
         }
         .dropDestination(for: String.self) { items, _ in
-            guard let text = items.first, let id = UUID(uuidString: text) else { return false }
+            // Only an event belongs here: a sticky note dragged from the panel is not accepted.
+            guard let text = items.first, let id = UUID(uuidString: text),
+                  store.eventIndex(of: id) != nil else { return false }
             store.move(eventID: id, toDay: day)
             return true
         } isTargeted: { targeted in
             app.setHovered("drop-\(dayKey)", targeted)
+        }
+    }
+
+    /// The forecast of the day at the foot of the column: the icon big and quiet — the same tone as the
+    /// paper, a little darker — with the temperatures under it, in a colour that reads. On the dark
+    /// column of today the two are inverted: the icon is *lighter* than the background under it.
+    /// The icon is a fixed size (about half the width of a column): widening the window must not make
+    /// it grow.
+    @ViewBuilder
+    private func weatherWatermark(isToday: Bool) -> some View {
+        if let forecast = app.weather.forecast(on: day) {
+            VStack(spacing: 1) {
+                Image(systemName: forecast.symbol)
+                    .font(.system(size: 80))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(isToday ? Theme.todayColumnIcon : Theme.paperShade)
+
+                Text("\(forecast.maximumText)/\(forecast.minimumText)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(isToday ? Theme.todayColumnText : Theme.inkSoft)
+            }
+            .padding(.bottom, 2)
+            .help("\(forecast.summary) · max \(forecast.maximumText) · min \(forecast.minimumText)")
         }
     }
 }
@@ -103,6 +128,12 @@ struct EventBlockView: View {
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(event.category.color.opacity(event.isCompleted ? 0.08 : 0.14))
+        )
+        // An opaque paper base under the tint: the card keeps its colour on the dark column of today
+        // instead of becoming a dark patch, and on the paper columns nothing changes.
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Theme.paper)
         )
         .overlay(alignment: .leading) {
             RoundedRectangle(cornerRadius: 2)

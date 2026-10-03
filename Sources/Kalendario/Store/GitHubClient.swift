@@ -3,6 +3,7 @@ import Foundation
 enum GitHubError: LocalizedError {
     case invalidRepository
     case unauthorized
+    case refused(String?)
     case notFound(repository: String, hasToken: Bool)
     case rateLimited(reset: Date?)
     case server(Int)
@@ -15,6 +16,10 @@ enum GitHubError: LocalizedError {
             return "Use the owner/name form, for example swiftlang/swift."
         case .unauthorized:
             return "GitHub rejected the token: check it, or clear it to browse public repositories."
+        case .refused(let message):
+            var text = "GitHub refused this request"
+            if let message, !message.isEmpty { text += ": \(message)" }
+            return text + ". A fine-grained token needs the **Contents: read** permission for the commit count, and **Issues: read** for the import; a classic token needs the repo scope."
         case .notFound(let repository, let hasToken):
             if hasToken {
                 return "Repository \(repository) not found, or the token cannot see it."
@@ -113,7 +118,7 @@ struct GitHubClient {
         while collected.count < limit && page <= Self.pageCap {
             let url = try Self.makeURL(repository: repository, state: state,
                                        labels: labels, page: page, pageSize: pageSize)
-            let data = try await send(url, repository: repository)
+            let (data, _) = try await send(url, repository: repository)
 
             let payload: [IssueDTO]
             do {
@@ -134,7 +139,67 @@ struct GitHubClient {
 
     // MARK: - Request
 
-    private func send(_ url: URL, repository: String) async throws -> Data {
+    /// How many commits the repository has on its default branch, as GitHub counts them: one
+    /// request, asking for a single commit per page, and reading the number of the "last" page out
+    /// of the Link header. No Link header means one page, so the commits in it are all there are.
+    /// With `from`/`to` it counts only the commits of that window (a day of the week, usually).
+    func commitCount(repository rawRepository: String,
+                     from: Date? = nil,
+                     to: Date? = nil) async throws -> Int {
+        let repository = Self.normalize(rawRepository)
+        guard Self.isValid(repository) else { throw GitHubError.invalidRepository }
+
+        let url = try Self.makeCommitCountURL(repository: repository, from: from, to: to)
+        let (data, response) = try await send(url, repository: repository)
+        if let link = response.value(forHTTPHeaderField: "Link"),
+           let count = Self.lastPage(in: link) {
+            return count
+        }
+        return ((try? JSONDecoder.github.decode([CommitDTO].self, from: data)) ?? []).count
+    }
+
+    /// The "message" field of a GitHub error body, if there is one.
+    private static func serverMessage(in data: Data) -> String? {
+        struct Payload: Decodable { let message: String? }
+        return (try? JSONDecoder().decode(Payload.self, from: data))?.message
+    }
+
+    private static func lastPage(in link: String) -> Int? {
+        for part in link.split(separator: ",") where part.contains("rel=\"last\"") {
+            // The part looks like "<…?per_page=1&page=211547>; rel=\"last\"": the number wanted is
+            // the one after the *last* "page=", because "per_page=1" contains "page=" too.
+            guard let marker = part.range(of: "page=", options: .backwards) else { continue }
+            return Int(part[marker.upperBound...].prefix { $0.isNumber })
+        }
+        return nil
+    }
+
+    private static func makeCommitCountURL(repository: String, from: Date?, to: Date?) throws -> URL {
+        let components = repository.split(separator: "/", maxSplits: 1)
+        guard components.count == 2 else { throw GitHubError.invalidRepository }
+
+        var url = baseURL
+        url.appendPathComponent("repos")
+        url.appendPathComponent(String(components[0]))
+        url.appendPathComponent(String(components[1]))
+        url.appendPathComponent("commits")
+
+        guard var builder = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw GitHubError.invalidRepository
+        }
+        var items = [URLQueryItem(name: "per_page", value: "1")]
+        if let from {
+            items.append(URLQueryItem(name: "since", value: ISO8601DateFormatter.plain.string(from: from)))
+        }
+        if let to {
+            items.append(URLQueryItem(name: "until", value: ISO8601DateFormatter.plain.string(from: to)))
+        }
+        builder.queryItems = items
+        guard let finalURL = builder.url else { throw GitHubError.invalidRepository }
+        return finalURL
+    }
+
+    private func send(_ url: URL, repository: String) async throws -> (data: Data, response: HTTPURLResponse) {
         var request = URLRequest(url: url)
         request.timeoutInterval = 25
         request.httpMethod = "GET"
@@ -161,7 +226,7 @@ struct GitHubClient {
 
         switch http.statusCode {
         case 200...299:
-            return data
+            return (data, http)
 
         case 401:
             throw GitHubError.unauthorized
@@ -174,7 +239,9 @@ struct GitHubClient {
                     .map { Date(timeIntervalSince1970: $0) }
                 throw GitHubError.rateLimited(reset: reset)
             }
-            throw GitHubError.unauthorized
+            // Not a rate limit: GitHub refused the request itself, and says why in the body ("Resource not
+            // accessible by personal access token" is the usual answer when a permission is missing).
+            throw GitHubError.refused(Self.serverMessage(in: data))
 
         case 404:
             throw GitHubError.notFound(repository: repository, hasToken: hasToken)
@@ -243,6 +310,11 @@ struct GitHubClient {
 }
 
 // MARK: - Decoding
+
+/// Only the field the commit count needs, when there is no Link header to read the total from.
+private struct CommitDTO: Decodable {
+    let sha: String
+}
 
 private struct IssueDTO: Decodable {
     let number: Int

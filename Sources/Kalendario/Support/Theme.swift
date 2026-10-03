@@ -2,6 +2,19 @@ import SwiftUI
 
 enum Theme {
     static let paper = Color.dynamic(light: "#F8F4EC", dark: "#191817")
+    /// A touch darker than the paper: the big weather icon that lies behind each day of the week.
+    static let paperShade = Color.dynamic(light: "#EAE2D3", dark: "#0D0C0B")
+    /// The column of today: a dark slate (in both appearances) with the events drawn on their own
+    /// paper inside it, so they keep their colours and stay readable. The forecast on it is a
+    /// **darker celeste** (`#3D8FBC`, about 2,2:1) and lies *behind* the events exactly like the
+    /// paperShade of the other days: the user asked for the same superimposition everywhere
+    /// («fai il simbolo più scuro e fai lo stesso effetto grafico di sovrapposizione che abbiamo sulle
+    /// altre colonne», 2026-10-04). In the dark appearance the column stays *lighter* than the paper,
+    /// so the cards do not melt into it. The round "+" of the column is white on today instead of
+    /// accent blue: blue on this slate is only 1,7:1, and the button disappeared.
+    static let todayColumn = Color.dynamic(light: "#39414B", dark: "#2A313A")
+    static let todayColumnIcon = Color(hex: "#3D8FBC")
+    static let todayColumnText = Color(hex: "#CFEFFF")
     static let paperElevated = Color.dynamic(light: "#FFFCF5", dark: "#221F1D")
     static let ink = Color.dynamic(light: "#211F1B", dark: "#F3EFE7")
     static let inkSoft = Color.dynamic(light: "#6C655A", dark: "#A8A093")

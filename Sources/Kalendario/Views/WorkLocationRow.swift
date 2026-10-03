@@ -1,28 +1,5 @@
 import SwiftUI
 
-/// One row right under the day headers: where you work on each day of the week.
-struct WorkLocationRow: View {
-    let days: [Date]
-
-    private let app = AppState.shared
-
-    var body: some View {
-        let showManager = app.showLocations
-
-        HStack(spacing: 0) {
-            ForEach(days, id: \.self) { day in
-                WorkLocationCell(day: day)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.vertical, 9)
-        .sheet(isPresented: Binding(get: { showManager }, set: { app.showLocations = $0 })) {
-            WorkLocationsView()
-                .environment(AppState.shared.store)
-        }
-    }
-}
-
 /// The coloured place chip of one day. Tapping it opens the picker popover.
 /// The chip is a plain view on purpose: a `Menu` label would not stretch to the column width.
 struct WorkLocationCell: View {

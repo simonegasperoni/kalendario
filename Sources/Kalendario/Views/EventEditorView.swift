@@ -8,11 +8,13 @@ struct EventEditorView: View {
     @Environment(\.kalendarioPreview) private var preview
 
     private let presetDurations = [15, 30, 45, 60, 90, 120, 180, 240]
-    /// Three tags per row: eight categories in three readable rows.
-    private static let categoryRows: [[EventCategory]] = {
+    /// Three tags per row: eight categories in three readable rows. A row shorter than three is
+    /// padded with empty slots, so the tags that share the row keep the same width as the others.
+    private static let categoryRows: [[EventCategory?]] = {
         let all = EventCategory.allCases
-        return stride(from: 0, to: all.count, by: 3).map {
-            Array(all[$0..<min($0 + 3, all.count)])
+        return stride(from: 0, to: all.count, by: 3).map { start in
+            let row = all[start..<min(start + 3, all.count)].map { Optional($0) }
+            return row + Array(repeating: nil, count: 3 - row.count)
         }
     }()
 
@@ -107,13 +109,25 @@ struct EventEditorView: View {
             VStack(spacing: 6) {
                 ForEach(Array(Self.categoryRows.enumerated()), id: \.offset) { entry in
                     HStack(spacing: 6) {
-                        ForEach(entry.element) { category in
-                            categoryTag(category)
+                        ForEach(Array(entry.element.enumerated()), id: \.offset) { slot in
+                            if let category = slot.element {
+                                categoryTag(category)
+                            } else {
+                                emptyTagSlot
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    /// An unused slot at the end of a row: a tag that is not drawn. It takes part in the layout, so
+    /// the tags of a two-tag row come out as wide as the ones of a full row.
+    private var emptyTagSlot: some View {
+        categoryTag(EventCategory.allCases[0])
+            .hidden()
+            .allowsHitTesting(false)
     }
 
     private func categoryTag(_ category: EventCategory) -> some View {

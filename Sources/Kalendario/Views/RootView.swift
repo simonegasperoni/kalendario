@@ -7,7 +7,7 @@ struct RootView: View {
     var body: some View {
         let editor = app.editor
         let showIssues = app.showIssueImport
-        let showWeatherSettings = app.showWeatherPlace
+        let showSettings = app.showSettings
 
         VStack(spacing: 0) {
             HeaderBar()
@@ -17,9 +17,17 @@ struct RootView: View {
 
             Separator()
 
+            SystemStatsRow()
+
+            Separator()
+
             WeekGridView(weekStart: app.weekStart,
                          onCreateEvent: { day, hour in app.newEvent(day: day, hour: hour) },
                          onEditEvent: { event in app.edit(event) })
+
+            Separator()
+
+            GitHubMetaRow()
 
             Separator()
 
@@ -28,9 +36,10 @@ struct RootView: View {
             Separator()
 
             FooterView(weekStart: app.weekStart)
-                .sheet(isPresented: Binding(get: { showWeatherSettings },
-                                            set: { app.showWeatherPlace = $0 })) {
-                    WeatherSettingsView(model: app.weather)
+                .sheet(isPresented: Binding(get: { showSettings },
+                                            set: { app.showSettings = $0 })) {
+                    SettingsView()
+                        .environment(store)
                 }
         }
         .background(Theme.paper)

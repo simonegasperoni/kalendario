@@ -10,6 +10,7 @@ struct StickyNoteCardView: View {
 
     private var app: AppState { AppState.shared }
     private var hoverKey: String { "note-\(noteID.uuidString)" }
+    private var dropKey: String { "drop-note-\(noteID.uuidString)" }
     private var hovering: Bool { app.isHovered(hoverKey) }
     private var draftTodo: String { app.todoDraft(for: noteID) }
 
@@ -20,7 +21,45 @@ struct StickyNoteCardView: View {
         }
     }
 
+    /// The card outline: the clip, the fill (which carries the shadow) and the border all use it.
+    private var outline: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+    }
+
     private func card(note: Binding<StickyNote>, value: StickyNote) -> some View {
+        // The panel gives every card all the height it can spare (228 pt minus its padding). When
+        // the content fits, the card keeps its natural size; a note with many to-dos — an imported
+        // issue, for instance — would not fit, so it scrolls inside the card instead of growing
+        // past the panel and covering the calendar body above it.
+        ViewThatFits(in: .vertical) {
+            content(note: note, value: value)
+            content(note: note, value: value).cardScroll()
+        }
+        // Clipped to the card's outline so the scroll view inside (a plain rectangle) never shows
+        // a square edge. The shadow comes from the fill below, not from this composed view: with
+        // the scroll the composed view is a rectangle and would cast a rectangular shadow.
+        .clipShape(outline)
+        .background(
+            outline
+                .fill(value.color.paper)
+                .shadow(color: .black.opacity(0.10), radius: 7, x: 0, y: 3)
+        )
+        .overlay(
+            outline.strokeBorder(value.color.edge.opacity(0.35), lineWidth: 1)
+        )
+        // Caret shown while another note is dragged over this card: the note would land before it.
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Theme.accent)
+                .frame(width: 3)
+                .padding(.vertical, 6)
+                .padding(.leading, 3)
+                .opacity(app.isHovered(dropKey) ? 1 : 0)
+        }
+        .onHover { app.setHovered(hoverKey, $0) }
+    }
+
+    private func content(note: Binding<StickyNote>, value: StickyNote) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             header(note: note, value: value)
 
@@ -32,22 +71,6 @@ struct StickyNoteCardView: View {
             addTodoRow(note: note, value: value)
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(value.color.paper)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(value.color.edge.opacity(0.35), lineWidth: 1)
-        )
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(value.color.edge.opacity(0.85))
-                .frame(height: 3)
-                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 14, topTrailingRadius: 14))
-        }
-        .shadow(color: .black.opacity(0.10), radius: 7, x: 0, y: 3)
-        .onHover { app.setHovered(hoverKey, $0) }
     }
 
     private func header(note: Binding<StickyNote>, value: StickyNote) -> some View {
@@ -57,9 +80,20 @@ struct StickyNoteCardView: View {
             InlineField(text: note.title,
                         placeholder: "Title",
                         font: .system(size: 13, weight: .semibold, design: .rounded),
-                        color: value.color.ink)
+                        color: value.color.ink,
+                        wraps: true)
 
             Spacer(minLength: 0)
+
+            // The text fields take all the room they are given, so the drag that reorders the notes
+            // has to start from a handle of its own instead of from the card: this is the source.
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(value.color.ink.opacity(0.45))
+                .frame(width: 20, height: 18)
+                .contentShape(Rectangle())
+                .draggable(value.id.uuidString)
+                .help("Drag to reorder the sticky notes")
 
             Menu {
                 Section("Color") {
@@ -119,7 +153,8 @@ struct StickyNoteCardView: View {
                         placeholder: "Task",
                         font: .system(size: 12.5),
                         color: todo.isDone ? value.color.ink.opacity(0.55) : value.color.ink,
-                        strikethrough: todo.isDone)
+                        strikethrough: todo.isDone,
+                        wraps: true)
 
             Spacer(minLength: 0)
 

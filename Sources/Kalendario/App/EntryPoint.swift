@@ -32,6 +32,11 @@ enum EntryPoint {
             PreviewRenderer.writeEditor(to: url, dark: dark, size: size)
             exit(0)
 
+        case .settings(let url, let dark, let size):
+            _ = NSApplication.shared
+            PreviewRenderer.writeSettings(to: url, dark: dark, size: size)
+            exit(0)
+
         case .weatherCheck(let place):
             runWeatherCheck(place)
             exit(0)
@@ -42,6 +47,18 @@ enum EntryPoint {
 
         case .githubCheck(let repository):
             runGitHubCheck(repository)
+            exit(0)
+
+        case .commitsCheck(let repository):
+            runCommitsCheck(repository)
+            exit(0)
+
+        case .notesCheck:
+            runNotesCheck()
+            exit(0)
+
+        case .statsCheck:
+            runStatsCheck()
             exit(0)
 
         case .jsonCheck(let path):
@@ -161,6 +178,101 @@ enum EntryPoint {
         }
     }
 
+    /// Diagnostic entry point: reorders the sticky notes of a week the way the panel does with a
+    /// drag, and reads the snapshot back, because a drag cannot be seen in a static render and the
+    /// order has to survive the file.
+    /// Usage: Kalendario --notes-check
+    private static func runNotesCheck() {
+        let store = DataStore(inMemory: true)
+        let monday = WeekMath.startOfWeek(Date())
+
+        func order() -> [String] { store.notes(inWeek: monday).map(\.displayTitle) }
+
+        print("notes-check: \(order().count) notes this week")
+        print("  start: \(order().joined(separator: " | "))")
+
+        guard order().count >= 3 else {
+            print("notes-check: FAILED — the seeded week needs at least 3 notes")
+            exit(1)
+        }
+
+        let start = order()
+        let notes = store.notes(inWeek: monday)
+
+        // Drag the first note onto the last one: it lands before it.
+        let movedBefore = store.moveNote(id: notes[0].id, before: notes[2].id, inWeek: monday)
+        let afterBefore = order()
+        print("  first onto third (\(movedBefore)): \(afterBefore.joined(separator: " | "))")
+        let expectedBefore = [start[1], start[0], start[2]]
+        guard movedBefore, afterBefore == expectedBefore else {
+            print("notes-check: FAILED — expected \(expectedBefore.joined(separator: " | "))")
+            exit(1)
+        }
+
+        // Drag the first note of the week into the free room at the end of the row: it goes last.
+        let appended = store.moveNote(id: notes[0].id, before: nil, inWeek: monday)
+        let afterAppend = order()
+        print("  first to the end (\(appended)): \(afterAppend.joined(separator: " | "))")
+        let expectedAppend = [start[1], start[2], start[0]]
+        guard appended, afterAppend == expectedAppend else {
+            print("notes-check: FAILED — expected \(expectedAppend.joined(separator: " | "))")
+            exit(1)
+        }
+
+        // Drops that must not be accepted: the note on itself, an event, a note of another week.
+        let otherWeek = WeekMath.addWeeks(1, to: monday)
+        let otherNote = store.addNote(inWeek: otherWeek)
+        let selfDrop = store.moveNote(id: notes[1].id, before: notes[1].id, inWeek: monday)
+        let unknownDrop = store.moveNote(id: UUID(), before: notes[1].id, inWeek: monday)
+        let crossWeek = store.moveNote(id: otherNote.id, before: notes[1].id, inWeek: monday)
+        print("  rejected: on itself \(selfDrop), unknown id \(unknownDrop), other week \(crossWeek)")
+        guard !selfDrop, !unknownDrop, !crossWeek, order() == expectedAppend else {
+            print("notes-check: FAILED — a drop was accepted when it should not be, or the order moved")
+            exit(1)
+        }
+
+        // The order is the array order in the file: it has to come back the same way.
+        var snapshot = KalendarioSnapshot()
+        snapshot.notes = store.notes
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        do {
+            let data = try encoder.encode(snapshot)
+            let restored = try decoder.decode(KalendarioSnapshot.self, from: data)
+                .notes
+                .filter { WeekMath.isSameDay($0.weekStart, monday) }
+                .map(\.displayTitle)
+            print("  after save/load: \(restored.joined(separator: " | "))")
+            guard restored == expectedAppend else {
+                print("notes-check: FAILED — the order did not survive the round trip")
+                exit(1)
+            }
+        } catch {
+            print("notes-check: FAILED — \(error)")
+            exit(1)
+        }
+
+        print("notes-check: ok")
+    }
+
+    /// Diagnostic entry point: prints what the status row shows — CPU and GPU temperature, memory
+    /// and disk use — because none of it can be read from a static render.
+    /// Usage: Kalendario --stats-check
+    private static func runStatsCheck() {
+        let stats = SystemStats()
+        stats.read()
+        print("stats-check:")
+        print("  CPU     \(SystemStats.temperature(stats.cpuTemperature))")
+        print("  GPU     \(SystemStats.temperature(stats.gpuTemperature))")
+        print("  memory  \(SystemStats.bytes(stats.memoryUsed, style: .memory)) of \(SystemStats.bytes(stats.memoryTotal, style: .memory)) (\(SystemStats.percent(stats.memoryFraction)))")
+        print("  disk    \(SystemStats.bytes(stats.diskUsed, style: .file)) of \(SystemStats.bytes(stats.diskTotal, style: .file)) (\(SystemStats.percent(stats.diskFraction)))")
+        let sensorsOK = stats.cpuTemperature != nil && stats.gpuTemperature != nil
+        print(sensorsOK ? "stats-check: ok" : "stats-check: FAILED — the temperature sensors did not answer")
+        if !sensorsOK { exit(1) }
+    }
+
     /// Diagnostic entry point: lists every candidate the geocoder returns for a name.
     /// Usage: Kalendario --weather-search "Milano"
     private static func runWeatherSearch(_ name: String) {
@@ -211,6 +323,45 @@ enum EntryPoint {
         report.forEach { print($0) }
     }
 
+    /// Diagnostic entry point: the commits of every day of the current week — the numbers the row at
+    /// the foot of the calendar shows — because a seven-request read is not visible in a render.
+    /// Usage: Kalendario --commits-check owner/name
+    private static func runCommitsCheck(_ repository: String) {
+        let client = GitHubClient(token: TokenStore.token())
+        let week = WeekMath.startOfWeek(Date())
+        var report: [String] = []
+        let finished = DispatchSemaphore(value: 0)
+
+        Task {
+            report.append("repository: \(GitHubClient.normalize(repository))")
+            var total = 0
+            for day in WeekMath.daysInWeek(from: week) {
+                let from = WeekMath.makeDate(day: day, hour: 0)
+                let to = WeekMath.calendar.date(byAdding: .day, value: 1, to: from)
+                let label = "\(DateText.monthDayShort.string(from: day)) \(DateText.weekdayTitle(day))"
+                do {
+                    let count = try await client.commitCount(repository: repository,
+                                                             from: from,
+                                                             to: to)
+                    total += count
+                    report.append("  \(label): \(count)")
+                } catch {
+                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    report.append("  \(label): \(message)")
+                    report.append("  — the remaining days were not asked for")
+                    break
+                }
+            }
+            report.append("total for the week: \(total)")
+            finished.signal()
+        }
+
+        if finished.wait(timeout: .now() + 60) == .timedOut {
+            report.append("error: timed out waiting for GitHub")
+        }
+        report.forEach { print($0) }
+    }
+
     /// Diagnostic entry point: reads a repository through the real API and prints what was parsed.
     /// Usage: Kalendario --github-check owner/name
     private static func runGitHubCheck(_ repository: String) {
@@ -225,6 +376,13 @@ enum EntryPoint {
             do {
                 let issues = try await client.issues(repository: repository, state: "open", limit: 5)
                 report.append("issues parsed: \(issues.count)")
+                do {
+                    let commits = try await client.commitCount(repository: repository)
+                    report.append("commits on the default branch: \(RepoMetaModel.countText(commits))")
+                } catch {
+                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    report.append("commits: \(message)")
+                }
                 for issue in issues {
                     let labels = issue.labels.isEmpty ? "-" : issue.labels.joined(separator: "|")
                     let due = issue.milestoneDue.map { DateText.monthDayShort.string(from: $0) } ?? "-"
@@ -269,6 +427,9 @@ struct KalendarioApp: App {
                 Divider()
                 Button("Show window") { WindowManager.shared.showMainWindow() }
                     .keyboardShortcut("0", modifiers: .command)
+                Divider()
+                Button("Settings…") { AppState.shared.showSettings = true }
+                    .keyboardShortcut(",", modifiers: .command)
             }
             CommandMenu("Week") {
                 Button("Today") { AppState.shared.goToToday() }

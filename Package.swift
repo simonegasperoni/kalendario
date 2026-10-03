@@ -10,6 +10,11 @@ let package = Package(
         .executable(name: "Kalendario", targets: ["Kalendario"])
     ],
     targets: [
-        .executableTarget(name: "Kalendario", path: "Sources/Kalendario")
+        .executableTarget(name: "Kalendario",
+                          path: "Sources/Kalendario",
+                          linkerSettings: [
+                              // The temperature sensors are read through IOKit (IOHID).
+                              .linkedFramework("IOKit")
+                          ])
     ]
 )

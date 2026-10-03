@@ -187,6 +187,10 @@ enum NoteColor: String, Codable, CaseIterable, Identifiable {
     case green = "verde"
     case purple = "lilla"
     case orange = "arancio"
+    case indigo = "indaco"
+    case teal = "turchese"
+    case slate = "ardesia"
+    case magenta = "magenta"
 
     var id: String { rawValue }
 
@@ -198,6 +202,10 @@ enum NoteColor: String, Codable, CaseIterable, Identifiable {
         case .green: return "Green"
         case .purple: return "Purple"
         case .orange: return "Orange"
+        case .indigo: return "Indigo"
+        case .teal: return "Teal"
+        case .slate: return "Slate"
+        case .magenta: return "Magenta"
         }
     }
 
@@ -209,6 +217,10 @@ enum NoteColor: String, Codable, CaseIterable, Identifiable {
         case .green: return Color.dynamic(light: "#D8EDD1", dark: "#22371E")
         case .purple: return Color.dynamic(light: "#E5DBF8", dark: "#312745")
         case .orange: return Color.dynamic(light: "#FFDCBB", dark: "#45301E")
+        case .indigo: return Color.dynamic(light: "#DBDDF7", dark: "#252743")
+        case .teal: return Color.dynamic(light: "#CFEAE6", dark: "#1E3B38")
+        case .slate: return Color.dynamic(light: "#DFE4E8", dark: "#2C3339")
+        case .magenta: return Color.dynamic(light: "#F6D6EA", dark: "#3F2036")
         }
     }
 
@@ -221,13 +233,17 @@ enum NoteColor: String, Codable, CaseIterable, Identifiable {
         case .green: return "#55943F"
         case .purple: return "#8161BE"
         case .orange: return "#D07F31"
+        case .indigo: return "#4653B0"
+        case .teal: return "#2E8F86"
+        case .slate: return "#6B7784"
+        case .magenta: return "#B44B94"
         }
     }
 
     var edge: Color { Color(hex: edgeHex) }
 
     /// Darker, saturated version of the colour, for tags that must be clearly visible on the
-    /// paper background. All six are dark enough for white text (contrast ≥ 4.8:1).
+    /// paper background. All ten are dark enough for white text (contrast ≥ 4.8:1).
     var tagFillHex: String {
         switch self {
         case .yellow: return "#8A6A0F"
@@ -236,6 +252,10 @@ enum NoteColor: String, Codable, CaseIterable, Identifiable {
         case .green: return "#3F7A2E"
         case .purple: return "#6A48A8"
         case .orange: return "#A85F1C"
+        case .indigo: return "#2F3A7A"
+        case .teal: return "#1B6E66"
+        case .slate: return "#4A5560"
+        case .magenta: return "#8F2B72"
         }
     }
 
@@ -268,6 +288,10 @@ enum NoteColor: String, Codable, CaseIterable, Identifiable {
         case .green: return Color.dynamic(light: "#1D3116", dark: "#DCF2D6")
         case .purple: return Color.dynamic(light: "#2A1F3E", dark: "#E8DFF9")
         case .orange: return Color.dynamic(light: "#3E2712", dark: "#FFE4CA")
+        case .indigo: return Color.dynamic(light: "#1A1E3D", dark: "#DEE0FA")
+        case .teal: return Color.dynamic(light: "#123A36", dark: "#D8F2EE")
+        case .slate: return Color.dynamic(light: "#232B33", dark: "#DCE3E9")
+        case .magenta: return Color.dynamic(light: "#3A142B", dark: "#FBD9EE")
         }
     }
 }

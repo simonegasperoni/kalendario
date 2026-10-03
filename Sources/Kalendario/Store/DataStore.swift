@@ -148,10 +148,11 @@ final class DataStore {
         }
     }
 
+    /// Sticky notes of one week, in the order they are stored: that order is the manual one, the
+    /// one changed by dragging a note in the panel. The array itself is kept in that order in the
+    /// data file, so no extra field is needed.
     func notes(inWeek monday: Date) -> [StickyNote] {
-        notes
-            .filter { WeekMath.isSameDay($0.weekStart, monday) }
-            .sorted { $0.createdAt < $1.createdAt }
+        notes.filter { WeekMath.isSameDay($0.weekStart, monday) }
     }
 
     func note(id: UUID) -> StickyNote? { notes.first { $0.id == id } }
@@ -230,6 +231,32 @@ final class DataStore {
         guard let index = noteIndex(of: id) else { return }
         notes[index].weekStart = monday
         scheduleSave()
+    }
+
+    /// Reorders the notes of one week: the dragged note is placed before `targetID`, or last when
+    /// `targetID` is nil. The week's notes keep their slots in the array, so the notes of other
+    /// weeks do not move. Returns false when there is nothing to do — the note is not in that week,
+    /// it is the target itself, or the target is not there — so a drop of something else (an event,
+    /// a note of another week) is not accepted.
+    @discardableResult
+    func moveNote(id: UUID, before targetID: UUID?, inWeek monday: Date) -> Bool {
+        let week = notes(inWeek: monday)
+        guard let moving = week.first(where: { $0.id == id }), targetID != id else { return false }
+
+        var reordered = week.filter { $0.id != id }
+        if let targetID {
+            guard let target = reordered.firstIndex(where: { $0.id == targetID }) else { return false }
+            reordered.insert(moving, at: target)
+        } else {
+            reordered.append(moving)
+        }
+
+        let slots = notes.indices.filter { WeekMath.isSameDay(notes[$0].weekStart, monday) }
+        guard slots.count == reordered.count else { return false }
+        for (slot, note) in zip(slots, reordered) { notes[slot] = note }
+
+        scheduleSave()
+        return true
     }
 
     func addTodo(noteID: UUID, text: String) {

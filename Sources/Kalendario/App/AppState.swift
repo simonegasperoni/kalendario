@@ -109,13 +109,28 @@ final class AppState {
 
     // MARK: - Weather
 
-    var showWeatherPlace = false
+    /// The settings window: the weather place, the GitHub token and the work places.
+    var showSettings = false
     let weather = WeatherModel()
 
     // MARK: - GitHub issues
 
     var showIssueImport = false
     let issueImport = IssueImportModel()
+    /// Metadata of the repositories the calendar imports from (the status row at the foot of it).
+    let repoMeta = RepoMetaModel()
+    /// CPU and GPU temperature, memory and disk of this Mac (the row under the header).
+    let stats = SystemStats()
+
+    /// Reads the commit counts again, with the token: called right after a token is stored, so the
+    /// row at the foot of the calendar fills in without having to press its button.
+    func refreshRepoMeta() {
+        let names = repoMeta.names(imported: store.importedRepositories)
+        guard !names.isEmpty else { return }
+        let week = weekStart
+        let meta = repoMeta
+        Task { @MainActor in await meta.refresh(names, week: week, useToken: true) }
+    }
 
     func openIssueImport() {
         issueImport.persist()

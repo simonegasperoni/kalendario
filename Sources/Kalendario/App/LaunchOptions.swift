@@ -8,10 +8,14 @@ struct LaunchOptions {
         case importPreview(url: URL, dark: Bool, size: CGSize)
         case places(url: URL, dark: Bool, size: CGSize)
         case editor(url: URL, dark: Bool, size: CGSize)
+        case settings(url: URL, dark: Bool, size: CGSize)
         case icon(directory: URL)
         case githubCheck(repository: String)
+        case commitsCheck(repository: String)
         case weatherCheck(place: String)
         case weatherSearch(name: String)
+        case notesCheck
+        case statsCheck
         case jsonCheck(path: URL?)
     }
 
@@ -29,10 +33,14 @@ struct LaunchOptions {
         var importURL: URL?
         var placesURL: URL?
         var editorURL: URL?
+        var settingsURL: URL?
         var iconURL: URL?
         var githubRepository: String?
+        var commitsRepository: String?
         var weatherPlace: String?
         var weatherSearchName: String?
+        var notesCheckRequested = false
+        var statsCheckRequested = false
         var jsonCheckRequested = false
         var jsonCheckPath: URL?
         var watchSeconds: Int?
@@ -56,15 +64,25 @@ struct LaunchOptions {
             case "--render-editor":
                 index += 1
                 if index < arguments.count { editorURL = URL(fileURLWithPath: arguments[index]) }
+            case "--render-settings":
+                index += 1
+                if index < arguments.count { settingsURL = URL(fileURLWithPath: arguments[index]) }
             case "--github-check":
                 index += 1
                 if index < arguments.count { githubRepository = arguments[index] }
+            case "--commits-check":
+                index += 1
+                if index < arguments.count { commitsRepository = arguments[index] }
             case "--weather-check":
                 index += 1
                 if index < arguments.count { weatherPlace = arguments[index] }
             case "--weather-search":
                 index += 1
                 if index < arguments.count { weatherSearchName = arguments[index] }
+            case "--notes-check":
+                notesCheckRequested = true
+            case "--stats-check":
+                statsCheckRequested = true
             case "--json-check":
                 jsonCheckRequested = true
                 if index + 1 < arguments.count, arguments[index + 1].hasSuffix(".json") {
@@ -106,12 +124,20 @@ struct LaunchOptions {
             task = .places(url: placesURL, dark: dark, size: size)
         } else if let editorURL {
             task = .editor(url: editorURL, dark: dark, size: size)
+        } else if let settingsURL {
+            task = .settings(url: settingsURL, dark: dark, size: size)
         } else if let githubRepository {
             task = .githubCheck(repository: githubRepository)
+        } else if let commitsRepository {
+            task = .commitsCheck(repository: commitsRepository)
         } else if let weatherPlace {
             task = .weatherCheck(place: weatherPlace)
         } else if let weatherSearchName {
             task = .weatherSearch(name: weatherSearchName)
+        } else if notesCheckRequested {
+            task = .notesCheck
+        } else if statsCheckRequested {
+            task = .statsCheck
         } else if jsonCheckRequested {
             task = .jsonCheck(path: jsonCheckPath)
         }

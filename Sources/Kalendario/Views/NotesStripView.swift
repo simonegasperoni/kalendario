@@ -8,6 +8,9 @@ struct NotesStripView: View {
 
     let weekStart: Date
 
+    private let app = AppState.shared
+    private let endDropKey = "drop-notes-end"
+
     var body: some View {
         let weekNotes = store.notes(inWeek: weekStart)
 
@@ -17,14 +20,34 @@ struct NotesStripView: View {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(weekNotes) { note in
                     StickyNoteCardView(noteID: note.id, weekStart: weekStart)
-                        .frame(width: 268)
+                        .frame(width: 300)
+                        // Dropping a note on a card puts it before that card; the caret inside the
+                        // card shows where it will land.
+                        .dropDestination(for: String.self) { items, _ in
+                            guard let text = items.first, let id = UUID(uuidString: text) else { return false }
+                            return store.moveNote(id: id, before: note.id, inWeek: weekStart)
+                        } isTargeted: { targeted in
+                            app.setHovered("drop-note-\(note.id.uuidString)", targeted)
+                        }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .rowScroll()
+            // The free room at the end of the row puts a dragged note last, and lights up while the
+            // drag is over it.
+            .background(app.isHovered(endDropKey) ? Theme.accent.opacity(0.10) : Color.clear)
+            .dropDestination(for: String.self) { items, _ in
+                guard let text = items.first, let id = UUID(uuidString: text) else { return false }
+                return store.moveNote(id: id, before: nil, inWeek: weekStart)
+            } isTargeted: { targeted in
+                app.setHovered(endDropKey, targeted)
+            }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.top, 8)
+        // Room below the cards for their shadow: it reaches about 10 pt past the card, and a note
+        // that fills the panel would otherwise drop its bottom shadow on the separator under it.
+        .padding(.bottom, 12)
         .frame(height: 228)
         .background(Theme.paperElevated.opacity(0.25))
     }
